@@ -130,7 +130,7 @@ export function LoadingScreen({ onComplete }: { onComplete: () => void }) {
         {/* Text with typewriter effect */}
         <div className="text-center mb-8 h-20">
           <h2 className="text-3xl md:text-4xl font-bold text-gradient mb-3 animate-loading-text-reveal">
-            Clarence Espanol
+            Clarence Español
           </h2>
           <div className="h-6 overflow-hidden">
             <p
