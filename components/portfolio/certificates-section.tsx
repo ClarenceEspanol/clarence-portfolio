@@ -10,10 +10,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { getCertificates, type Certificate } from "@/lib/supabase/data";
-import { ZoomIn, ExternalLink, Calendar, Building2, FileText, X } from "lucide-react";
+import { ZoomIn, ExternalLink, Calendar, Building2, FileText, X, Download } from "lucide-react";
 import { ScrollAnimator } from "./scroll-animator";
 
 const categoryColors: Record<string, string> = {
@@ -33,22 +32,32 @@ function isPdfUrl(url: string): boolean {
 }
 
 /**
- * Renders the certificate preview.
- * For PDFs: use Google Docs viewer so it works cross-browser without the black bar.
+ * For PDFs: show a download + open button (no iframe — avoids CSP issues).
  * For images: use next/image.
  */
 function CertificatePreview({ url, title }: { url: string; title: string }) {
   if (isPdfUrl(url)) {
-    // Google Docs viewer strips browser PDF chrome and shows clean preview
-    const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
     return (
-      <div className="relative w-full rounded-lg overflow-hidden border border-border mb-4 bg-muted" style={{ height: 460 }}>
-        <iframe
-          src={viewerUrl}
-          title={title}
-          className="w-full h-full border-0 bg-white"
-          allow="fullscreen"
-        />
+      <div className="relative w-full rounded-xl overflow-hidden border border-border mb-4 bg-secondary/30 flex flex-col items-center justify-center gap-4 py-14">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+          <FileText className="w-8 h-8" />
+        </div>
+        <div className="text-center">
+          <p className="font-semibold text-sm mb-1">{title}</p>
+          <p className="text-xs text-muted-foreground font-mono">PDF Certificate</p>
+        </div>
+        <div className="flex gap-3">
+          <Button asChild size="sm" variant="outline">
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="w-4 h-4 mr-1.5" /> Open PDF
+            </a>
+          </Button>
+          <Button asChild size="sm">
+            <a href={url} download>
+              <Download className="w-4 h-4 mr-1.5" /> Download
+            </a>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -149,7 +158,6 @@ function CertificateModal({
                 </span>
               </div>
             </div>
-            {/* Keeping your manual X button here as requested */}
             <button
               onClick={onClose}
               className="shrink-0 p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
@@ -162,15 +170,7 @@ function CertificateModal({
 
         <div className="p-6 pt-4">
           {cert.certificate_url ? (
-            <>
-              <CertificatePreview url={cert.certificate_url} title={cert.title} />
-              <Button className="w-full" asChild>
-                <a href={cert.certificate_url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  {hasPdf ? "Open PDF" : "View Credential"}
-                </a>
-              </Button>
-            </>
+            <CertificatePreview url={cert.certificate_url} title={cert.title} />
           ) : (
             <div className="relative aspect-4/3 w-full rounded-lg overflow-hidden bg-linear-to-br from-muted to-muted/50 flex items-center justify-center mb-4">
               <div className="text-center">
@@ -224,7 +224,7 @@ export function CertificatesSection() {
           </div>
         </ScrollAnimator>
 
-        <ScrollAnimator delay={0.1}>
+        <ScrollAnimator delay={100}>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
             {featured.map((cert) => (
               <CertificateCard key={cert.id} cert={cert} onClick={() => handleCertClick(cert)} />
@@ -232,81 +232,77 @@ export function CertificatesSection() {
           </div>
         </ScrollAnimator>
 
-        <ScrollAnimator delay={0.2}>
+        <ScrollAnimator delay={200}>
           <div className="text-center">
-            <Dialog open={showAllModal} onOpenChange={setShowAllModal}>
-              <DialogTrigger asChild>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="px-6 py-5 text-base rounded-xl border-border hover:border-primary hover:bg-primary hover:text-primary-foreground transition-all duration-300"
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                  View All {allCertificates.length} Certificates
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col bg-card border-border p-0">
-                {/* Header for View All - NO custom manual button here to prevent double X */}
-                <DialogHeader className="flex flex-row items-center justify-between p-6 pb-4 border-b border-border shrink-0">
-                  <DialogTitle className="text-2xl font-bold">All Certificates</DialogTitle>
-                  {/* Note: Standard Dialog close button is hidden by p-0/header structure or redundant, 
-                      so we leave this header clean for standard behavior. */}
-                </DialogHeader>
-
-                <div className="overflow-y-auto p-6 pt-4 flex-1">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    {allCertificates.map((cert) => {
-                      const hasPdf = cert.certificate_url ? isPdfUrl(cert.certificate_url) : false;
-                      return (
-                        <div
-                          key={cert.id}
-                          onClick={() => {
-                            setShowAllModal(false);
-                            setTimeout(() => handleCertClick(cert), 200);
-                          }}
-                          className="p-4 rounded-xl bg-secondary/50 border border-border hover:border-primary/50 transition-all duration-300 cursor-pointer hover:bg-secondary"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                              {hasPdf ? (
-                                <FileText className="w-5 h-5 text-primary" />
-                              ) : (
-                                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                                </svg>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <Badge
-                                variant="outline"
-                                className={`mb-2 text-xs ${categoryColors[cert.category ?? ""] || "border-primary/30 text-primary"}`}
-                              >
-                                {cert.category}
-                              </Badge>
-                              <h4 className="font-medium text-sm mb-1 line-clamp-2">{cert.title}</h4>
-                              <p className="text-xs text-muted-foreground">{cert.issuer}</p>
-                              <p className="text-xs text-muted-foreground/70 mt-1">{cert.date}</p>
-                              {hasPdf && (
-                                <p className="text-xs text-primary/70 mt-1 flex items-center gap-1">
-                                  <FileText className="w-3 h-3" /> PDF
-                                </p>
-                              )}
-                            </div>
-                            <ZoomIn className="w-4 h-4 text-muted-foreground/50 shrink-0" />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button
+              size="lg"
+              variant="outline"
+              className="px-6 py-5 text-base rounded-xl border-border hover:border-primary hover:bg-primary hover:text-primary-foreground transition-all duration-300"
+              onClick={() => setShowAllModal(true)}
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              View All {allCertificates.length} Certificates
+            </Button>
           </div>
         </ScrollAnimator>
       </div>
+
+      {/* View All Modal */}
+      <Dialog open={showAllModal} onOpenChange={setShowAllModal}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col bg-card border-border p-0">
+          <DialogHeader className="flex flex-row items-center justify-between p-6 pb-4 border-b border-border shrink-0">
+            <DialogTitle className="text-2xl font-bold">All Certificates</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto p-6 pt-4 flex-1">
+            <div className="grid sm:grid-cols-2 gap-4">
+              {allCertificates.map((cert) => {
+                const hasPdf = cert.certificate_url ? isPdfUrl(cert.certificate_url) : false;
+                return (
+                  <div
+                    key={cert.id}
+                    onClick={() => {
+                      setShowAllModal(false);
+                      setTimeout(() => handleCertClick(cert), 200);
+                    }}
+                    className="p-4 rounded-xl bg-secondary/50 border border-border hover:border-primary/50 transition-all duration-300 cursor-pointer hover:bg-secondary"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        {hasPdf ? (
+                          <FileText className="w-5 h-5 text-primary" />
+                        ) : (
+                          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Badge
+                          variant="outline"
+                          className={`mb-2 text-xs ${categoryColors[cert.category ?? ""] || "border-primary/30 text-primary"}`}
+                        >
+                          {cert.category}
+                        </Badge>
+                        <h4 className="font-medium text-sm mb-1 line-clamp-2">{cert.title}</h4>
+                        <p className="text-xs text-muted-foreground">{cert.issuer}</p>
+                        <p className="text-xs text-muted-foreground/70 mt-1">{cert.date}</p>
+                        {hasPdf && (
+                          <p className="text-xs text-primary/70 mt-1 flex items-center gap-1">
+                            <FileText className="w-3 h-3" /> PDF
+                          </p>
+                        )}
+                      </div>
+                      <ZoomIn className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <CertificateModal cert={selectedCert} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </section>

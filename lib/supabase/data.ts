@@ -6,7 +6,7 @@ export interface Profile {
   title: string | null;
   email: string | null;
   linkedin: string | null;
-  github: string | null;           // ← new: GitHub profile URL
+  github: string | null;
   location: string | null;
   bio: string | null;
   experience: string | null;
@@ -18,6 +18,7 @@ export interface Profile {
   facebook: string | null;
   instagram: string | null;
   tiktok: string | null;
+  availability_status: "available" | "freelance" | "employed" | null;
 }
 
 export interface Skill {
@@ -34,10 +35,12 @@ export interface Project {
   id: string;
   title: string;
   description: string | null;
+  long_description: string | null;
   tags: string[];
   live_url: string | null;
   github_url: string | null;
   image_url: string | null;
+  gallery_images: string[];
   type: string | null;
   featured: boolean;
   sort_order: number;
@@ -107,7 +110,10 @@ export async function getProjects(): Promise<Project[]> {
     return [];
   }
 
-  return data || [];
+  return (data || []).map((p) => ({
+    ...p,
+    gallery_images: p.gallery_images ?? [],
+  }));
 }
 
 export async function getCertificates(): Promise<Certificate[]> {

@@ -8,12 +8,14 @@ import { SkillsSection } from "@/components/portfolio/skills-section";
 import { ProjectsSection } from "@/components/portfolio/projects-section";
 import { CertificatesSection } from "@/components/portfolio/certificates-section";
 import { ContactSection } from "@/components/portfolio/contact-section";
+import { FeedbackSection } from "@/components/portfolio/feedback-section";
 import { Footer } from "@/components/portfolio/footer";
 import { AIChatbot } from "@/components/portfolio/ai-chatbot";
 import { KonamiCode } from "@/components/portfolio/konami-code";
 import { ScrollProgress } from "@/components/portfolio/scroll-progress";
 import { BackToTop } from "@/components/portfolio/back-to-top";
 import { LoadingScreen } from "@/components/portfolio/loading-screen";
+import { CursorGlow } from "@/components/portfolio/cursor-glow";
 
 export default function Portfolio() {
   const [isLoading, setIsLoading] = useState(true);
@@ -27,6 +29,7 @@ export default function Portfolio() {
           isLoading ? "opacity-0" : "opacity-100"
         }`}
       >
+        <CursorGlow />
         <KonamiCode />
         <ScrollProgress />
         <BackToTop />
@@ -37,6 +40,7 @@ export default function Portfolio() {
         <ProjectsSection />
         <CertificatesSection />
         <ContactSection />
+        <FeedbackSection />
         <Footer />
         <AIChatbot />
       </main>

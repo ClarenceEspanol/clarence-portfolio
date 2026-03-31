@@ -13,7 +13,18 @@ const navItems = [
   { name: "Projects", href: "#projects" },
   { name: "Certificates", href: "#certificates" },
   { name: "Contact", href: "#contact" },
+  { name: "Feedback", href: "#feedback" },
 ];
+
+/** Smooth-scroll to a section without adding a trailing # to the URL */
+function scrollToSection(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+  e.preventDefault();
+  const id = href.replace("#", "");
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth" });
+  }
+}
 
 function ThemeToggleButton() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -27,19 +38,28 @@ function ThemeToggleButton() {
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="relative p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+      className="relative p-2 rounded-lg hover:bg-secondary transition-all duration-500 text-muted-foreground hover:text-foreground overflow-hidden"
       aria-label="Toggle theme"
+      style={{ isolation: "isolate" }}
     >
+      <span
+        className={cn(
+          "absolute inset-0 rounded-lg transition-all duration-700 pointer-events-none",
+          isDark
+            ? "bg-slate-900/0 scale-0 opacity-0"
+            : "bg-amber-50/0 scale-0 opacity-0"
+        )}
+      />
       <Sun
         className={cn(
-          "h-5 w-5 transition-all duration-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-          isDark ? "opacity-0 rotate-90 scale-0" : "opacity-100 rotate-0 scale-100"
+          "h-5 w-5 transition-all duration-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+          isDark ? "opacity-0 rotate-180 scale-0" : "opacity-100 rotate-0 scale-100"
         )}
       />
       <Moon
         className={cn(
-          "h-5 w-5 transition-all duration-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-          isDark ? "opacity-100 rotate-0 scale-100" : "opacity-0 -rotate-90 scale-0"
+          "h-5 w-5 transition-all duration-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+          isDark ? "opacity-100 rotate-0 scale-100" : "opacity-0 rotate-180 scale-0"
         )}
       />
       <span className="invisible">T</span>
@@ -103,6 +123,7 @@ export function Navigation() {
           {/* Logo */}
           <a
             href="#home"
+            onClick={(e) => scrollToSection(e, "#home")}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             <div
@@ -135,8 +156,9 @@ export function Navigation() {
               <a
                 key={item.name}
                 href={item.href}
+                onClick={(e) => scrollToSection(e, item.href)}
                 className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300",
+                  "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300",
                   activeSection === item.href.slice(1)
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -180,9 +202,12 @@ export function Navigation() {
             <a
               key={item.name}
               href={item.href}
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={(e) => {
+                scrollToSection(e, item.href);
+                setMobileMenuOpen(false);
+              }}
               className={cn(
-                "block px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300",
+                "flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300",
                 activeSection === item.href.slice(1)
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"

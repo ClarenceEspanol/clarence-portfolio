@@ -19,7 +19,67 @@ import {
   Star, Image, Save, MapPin, Linkedin, Briefcase, GraduationCap,
   LogOut, KeyRound, AlertCircle, Upload, X, Eye, EyeOff, Code,
   BookOpen, FileText, Bot, Send, ChevronDown, ChevronRight,
+  MessageCircleHeart, Download, Presentation,
 } from "lucide-react";
+
+// ─── Toast Notification System ───────────────────────────────────────────────
+
+type ToastType = "success" | "error" | "info" | "upload";
+
+interface Toast {
+  id: string;
+  message: string;
+  type: ToastType;
+}
+
+let _toastDispatch: ((toast: Omit<Toast, "id">) => void) | null = null;
+
+export function toast(message: string, type: ToastType = "success") {
+  _toastDispatch?.({ message, type });
+}
+
+function ToastContainer() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  useEffect(() => {
+    _toastDispatch = (t) => {
+      const id = Math.random().toString(36).slice(2);
+      setToasts((prev) => [...prev, { ...t, id }]);
+      setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== id)), 3500);
+    };
+    return () => { _toastDispatch = null; };
+  }, []);
+
+  if (toasts.length === 0) return null;
+
+  const icons: Record<ToastType, React.ReactNode> = {
+    success: <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />,
+    error:   <AlertCircle  className="w-4 h-4 text-destructive shrink-0" />,
+    info:    <RefreshCw    className="w-4 h-4 text-primary shrink-0" />,
+    upload:  <Upload       className="w-4 h-4 text-blue-500 shrink-0" />,
+  };
+
+  const borders: Record<ToastType, string> = {
+    success: "border-green-500/30 bg-green-500/10",
+    error:   "border-destructive/30 bg-destructive/10",
+    info:    "border-primary/30 bg-primary/10",
+    upload:  "border-blue-500/30 bg-blue-500/10",
+  };
+
+  return (
+    <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-xl text-sm font-medium backdrop-blur-sm animate-in slide-in-from-right-4 fade-in duration-300 ${borders[t.type]}`}
+        >
+          {icons[t.type]}
+          <span>{t.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +95,7 @@ interface Profile {
   profile_picture_url: string | null; resume_url: string | null;
   cv_url: string | null; portfolio_pptx_url: string | null;
   facebook: string | null; instagram: string | null; tiktok: string | null;
+  availability_status: "available" | "freelance" | "employed" | null;
 }
 
 interface Skill {
@@ -46,9 +107,9 @@ interface Skill {
 }
 
 interface Project {
-  id: string; title: string; description: string | null; tags: string[];
-  live_url: string | null; github_url: string | null; image_url: string | null;
-  type: string | null; featured: boolean; sort_order: number;
+  id: string; title: string; description: string | null; long_description: string | null;
+  tags: string[]; live_url: string | null; github_url: string | null; image_url: string | null;
+  gallery_images: string[]; type: string | null; featured: boolean; sort_order: number;
 }
 
 interface Certificate {
@@ -243,6 +304,7 @@ export function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      <ToastContainer />
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -268,7 +330,7 @@ export function AdminDashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-7 w-full max-w-4xl">
+          <TabsList className="grid grid-cols-8 w-full max-w-5xl">
             <TabsTrigger value="overview"><LayoutDashboard className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Overview</span></TabsTrigger>
             <TabsTrigger value="messages" className="relative">
               <MessageSquare className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Messages</span>
@@ -285,6 +347,9 @@ export function AdminDashboard() {
             <TabsTrigger value="certificates"><Award className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Certs</span></TabsTrigger>
             <TabsTrigger value="skills"><Sparkles className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Skills</span></TabsTrigger>
             <TabsTrigger value="profile"><User className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Profile</span></TabsTrigger>
+            <TabsTrigger value="feedback" className="relative">
+              <MessageCircleHeart className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Feedback</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* ── Overview ── */}
@@ -336,6 +401,7 @@ export function AdminDashboard() {
                     { label: "Manage Projects", icon: <FolderKanban className="w-4 h-4 mr-2" />, tab: "projects" },
                     { label: "Add Certificate", icon: <Award className="w-4 h-4 mr-2" />, tab: "certificates" },
                     { label: "Update Profile", icon: <User className="w-4 h-4 mr-2" />, tab: "profile" },
+                    { label: "View Feedback", icon: <MessageCircleHeart className="w-4 h-4 mr-2" />, tab: "feedback" },
                   ].map((action) => (
                     <Button key={action.tab} variant="ghost" className="w-full justify-start" onClick={() => setActiveTab(action.tab)}>
                       {action.icon}{action.label}
@@ -415,6 +481,7 @@ export function AdminDashboard() {
           <TabsContent value="certificates"><CertificatesManager /></TabsContent>
           <TabsContent value="skills"><SkillsManager /></TabsContent>
           <TabsContent value="profile"><ProfileManager /></TabsContent>
+          <TabsContent value="feedback"><FeedbackManager /></TabsContent>
         </Tabs>
       </main>
     </div>
@@ -870,7 +937,7 @@ function ProjectsManager() {
   const [tagInput, setTagInput] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [newProject, setNewProject] = useState<Omit<Project, "id" | "sort_order">>({
-    title: "", description: null, tags: [], live_url: null, github_url: null, image_url: null, type: null, featured: false,
+    title: "", description: null, long_description: null, tags: [], live_url: null, github_url: null, image_url: null, gallery_images: [], type: null, featured: false,
   });
 
   useEffect(() => {
@@ -882,23 +949,28 @@ function ProjectsManager() {
   const handleAdd = async () => {
     if (!newProject.title) return;
     setSaving(true);
-    const { data } = await supabase.from("projects").insert([{ ...newProject, sort_order: projects.length }]).select().single();
+    const { data, error } = await supabase.from("projects").insert([{ ...newProject, sort_order: projects.length }]).select().single();
+    if (error) { toast("Failed to add project.", "error"); setSaving(false); return; }
     if (data) setProjects([...projects, data]);
-    setNewProject({ title: "", description: null, tags: [], live_url: null, github_url: null, image_url: null, type: null, featured: false });
+    setNewProject({ title: "", description: null, long_description: null, tags: [], live_url: null, github_url: null, image_url: null, gallery_images: [], type: null, featured: false });
     setTagInput(""); setIsAddOpen(false); setSaving(false);
+    toast("Project added successfully!", "success");
   };
 
   const handleUpdate = async () => {
     if (!editingProject) return;
     setSaving(true);
-    await supabase.from("projects").update(editingProject).eq("id", editingProject.id);
+    const { error } = await supabase.from("projects").update(editingProject).eq("id", editingProject.id);
+    if (error) { toast("Failed to save changes.", "error"); setSaving(false); return; }
     setProjects(projects.map((p) => (p.id === editingProject.id ? editingProject : p)));
     setEditingProject(null); setSaving(false);
+    toast("Project saved successfully!", "success");
   };
 
   const handleDelete = async (id: string) => {
     await supabase.from("projects").delete().eq("id", id);
     setProjects(projects.filter((p) => p.id !== id));
+    toast("Project deleted.", "info");
   };
 
   const addTag = (tags: string[], setFn: (t: string[]) => void) => {
@@ -906,25 +978,109 @@ function ProjectsManager() {
   };
   const removeTag = (tag: string, tags: string[], setFn: (t: string[]) => void) => setFn(tags.filter((t) => t !== tag));
 
-  const ProjectForm = ({ project, setProject }: { project: any; setProject: (p: any) => void }) => (
+  const ProjectForm = ({ project, setProject }: { project: any; setProject: (p: any) => void }) => {
+    const galleryInputRef = useRef<HTMLInputElement | null>(null);
+    const galleryImages: string[] = project.gallery_images ?? [];
+    const remainingSlots = 5 - galleryImages.length;
+    const [uploadingGallery, setUploadingGallery] = useState(false);
+
+    const addGalleryImages = async (files: File[]) => {
+      const toUpload = files.slice(0, remainingSlots);
+      if (toUpload.length === 0) return;
+      setUploadingGallery(true);
+      toast(`Uploading ${toUpload.length} image${toUpload.length > 1 ? "s" : ""}…`, "upload");
+      const urls: string[] = [];
+      for (const file of toUpload) {
+        const url = await uploadImage(file);
+        if (url) urls.push(url);
+      }
+      setProject({ ...project, gallery_images: [...galleryImages, ...urls] });
+      setUploadingGallery(false);
+      if (urls.length > 0) toast(`${urls.length} image${urls.length > 1 ? "s" : ""} uploaded!`, "success");
+    };
+
+    const removeGalleryImage = (idx: number) => {
+      setProject({ ...project, gallery_images: galleryImages.filter((_: string, i: number) => i !== idx) });
+    };
+
+    return (
     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
       <div className="space-y-2"><label className="text-sm font-medium">Title *</label><Input value={project.title} onChange={(e) => setProject({ ...project, title: e.target.value })} placeholder="Project title" /></div>
       <div className="space-y-2"><label className="text-sm font-medium">Type</label><Input value={project.type || ""} onChange={(e) => setProject({ ...project, type: e.target.value })} placeholder="e.g., Full-Stack Development" /></div>
-      <div className="space-y-2"><label className="text-sm font-medium">Description</label><Textarea value={project.description || ""} onChange={(e) => setProject({ ...project, description: e.target.value })} rows={3} /></div>
+      <div className="space-y-2"><label className="text-sm font-medium">Short Description</label><Textarea value={project.description || ""} onChange={(e) => setProject({ ...project, description: e.target.value })} rows={2} placeholder="Brief summary shown on the card" /></div>
+      <div className="space-y-2"><label className="text-sm font-medium">Full Description <span className="text-xs text-muted-foreground">(shown in modal)</span></label><Textarea value={project.long_description || ""} onChange={(e) => setProject({ ...project, long_description: e.target.value })} rows={5} placeholder="Detailed project write-up, features, challenges, etc." /></div>
       <div className="space-y-2"><label className="text-sm font-medium">Live URL</label><Input value={project.live_url || ""} onChange={(e) => setProject({ ...project, live_url: e.target.value })} placeholder="https://..." /></div>
       <div className="space-y-2"><label className="text-sm font-medium flex items-center gap-1"><Github className="w-3.5 h-3.5" />GitHub URL</label><Input value={project.github_url || ""} onChange={(e) => setProject({ ...project, github_url: e.target.value })} placeholder="https://github.com/..." /></div>
+
+      {/* Cover image */}
       <div className="space-y-2">
-        <label className="text-sm font-medium flex items-center gap-1"><Image className="w-3.5 h-3.5" />Project Image</label>
+        <label className="text-sm font-medium flex items-center gap-1"><Image className="w-3.5 h-3.5" />Cover Image</label>
         <Input value={project.image_url || ""} onChange={(e) => setProject({ ...project, image_url: e.target.value })} placeholder="https://... or upload below" />
         <div className="flex items-center gap-2">
           <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
             const file = e.target.files?.[0]; if (!file) return;
-            const url = await uploadImage(file); if (url) setProject({ ...project, image_url: url });
+            toast("Uploading cover image…", "upload");
+            const url = await uploadImage(file);
+            if (url) { setProject({ ...project, image_url: url }); toast("Cover image uploaded!", "success"); }
           }} />
-          <Button type="button" variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}><Upload className="w-3.5 h-3.5 mr-1" />Upload Image</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}><Upload className="w-3.5 h-3.5 mr-1" />Upload Cover</Button>
         </div>
-        {project.image_url && <img src={project.image_url} alt="preview" className="w-full h-28 object-cover rounded-lg border" />}
+        {project.image_url && <img src={project.image_url} alt="cover preview" className="w-full h-28 object-cover rounded-lg border" />}
       </div>
+
+      {/* Gallery images */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium flex items-center gap-1">
+          <Image className="w-3.5 h-3.5" />Gallery Images
+          <span className="text-xs text-muted-foreground ml-1">({galleryImages.length}/5 — shown only in modal)</span>
+        </label>
+        {galleryImages.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {galleryImages.map((url: string, idx: number) => (
+              <div key={idx} className="relative group rounded-lg overflow-hidden border h-20">
+                <img src={url} alt={`gallery ${idx + 1}`} className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeGalleryImage(idx)}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+                <div className="absolute bottom-1 left-1 text-[10px] bg-black/50 text-white px-1 rounded">{idx + 1}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {remainingSlots > 0 && (
+          <div>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              ref={galleryInputRef}
+              onChange={async (e) => {
+                const files = Array.from(e.target.files ?? []);
+                await addGalleryImages(files);
+                if (e.target) e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={remainingSlots === 0 || uploadingGallery}
+            >
+              {uploadingGallery
+                ? <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />Uploading…</>
+                : <><Upload className="w-3.5 h-3.5 mr-1" />Add Gallery Images ({remainingSlots} slot{remainingSlots !== 1 ? "s" : ""} left)</>
+              }
+            </Button>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-2">
         <label className="text-sm font-medium">Tags</label>
         <div className="flex gap-2">
@@ -939,7 +1095,8 @@ function ProjectsManager() {
       </div>
       <div className="flex items-center justify-between"><label className="text-sm font-medium">Featured</label><Switch checked={project.featured} onCheckedChange={(v) => setProject({ ...project, featured: v })} /></div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -1031,29 +1188,35 @@ function CertificatesManager() {
   const handleAdd = async () => {
     if (!newCert.title || !newCert.issuer) return;
     setSaving(true);
-    const { data } = await supabase.from("certificates").insert([{ ...newCert, sort_order: certificates.length }]).select().single();
+    const { data, error } = await supabase.from("certificates").insert([{ ...newCert, sort_order: certificates.length }]).select().single();
+    if (error) { toast("Failed to add certificate.", "error"); setSaving(false); return; }
     if (data) setCertificates([...certificates, data]);
     setNewCert({ title: "", issuer: "", date: null, description: null, category: "Programming", certificate_url: null, featured: false });
     setIsAddOpen(false); setSaving(false);
+    toast("Certificate added successfully!", "success");
   };
 
   const handleUpdate = async () => {
     if (!editingCert) return;
     setSaving(true);
-    await supabase.from("certificates").update(editingCert).eq("id", editingCert.id);
+    const { error } = await supabase.from("certificates").update(editingCert).eq("id", editingCert.id);
+    if (error) { toast("Failed to save changes.", "error"); setSaving(false); return; }
     setCertificates(certificates.map((c) => (c.id === editingCert.id ? editingCert : c)));
     setEditingCert(null); setSaving(false);
+    toast("Certificate saved successfully!", "success");
   };
 
   const handleDelete = async (id: string) => {
     await supabase.from("certificates").delete().eq("id", id);
     setCertificates(certificates.filter((c) => c.id !== id));
+    toast("Certificate deleted.", "info");
   };
 
   const toggleFeatured = async (cert: Certificate) => {
     const updated = { ...cert, featured: !cert.featured };
     await supabase.from("certificates").update({ featured: updated.featured }).eq("id", cert.id);
     setCertificates(certificates.map((c) => (c.id === cert.id ? updated : c)));
+    toast(updated.featured ? "Marked as featured!" : "Removed from featured.", "success");
   };
 
   const filteredCerts = certificates.filter((c) => {
@@ -1087,7 +1250,9 @@ function CertificatesManager() {
         <div className="flex items-center gap-2">
           <input ref={certFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
             const file = e.target.files?.[0]; if (!file) return;
-            const url = await uploadFile(supabase, file, "certificates"); if (url) setCert({ ...cert, certificate_url: url });
+            toast("Uploading certificate file…", "upload");
+            const url = await uploadFile(supabase, file, "certificates");
+            if (url) { setCert({ ...cert, certificate_url: url }); toast("Certificate file uploaded!", "success"); }
           }} />
           <Button type="button" variant="outline" size="sm" onClick={() => certFileRef.current?.click()}><Upload className="w-3.5 h-3.5 mr-1" />Upload File (Image or PDF)</Button>
         </div>
@@ -1307,35 +1472,40 @@ function SkillsManager() {
         sort_order: skills.length,
       };
       const { data, error } = await supabase.from("skills").insert(payload).select().single();
-      if (error) { console.error("Insert error:", error); setSaving(false); return; }
+      if (error) { console.error("Insert error:", error); toast("Failed to add skill.", "error"); setSaving(false); return; }
       if (data) setSkills([...skills, data]);
       setNewSkill({ name: "", icon: "code", category: "frontend", proficiency_level: "intermediate", description: "" });
       setIsAddOpen(false);
+      toast("Skill added successfully!", "success");
     } finally { setSaving(false); }
   };
 
   const handleUpdate = async () => {
     if (!editingSkill) return;
     setSaving(true);
-    await supabase.from("skills").update({
+    const { error } = await supabase.from("skills").update({
       name: editingSkill.name,
       icon: editingSkill.icon,
       category: editingSkill.category,
       proficiency_level: editingSkill.proficiency_level,
       description: editingSkill.description || null,
     }).eq("id", editingSkill.id);
+    if (error) { toast("Failed to save changes.", "error"); setSaving(false); return; }
     setSkills(skills.map((s) => (s.id === editingSkill.id ? editingSkill : s)));
     setEditingSkill(null); setSaving(false);
+    toast("Skill saved successfully!", "success");
   };
 
   const handleDelete = async (id: string) => {
     await supabase.from("skills").delete().eq("id", id);
     setSkills(skills.filter((s) => s.id !== id));
+    toast("Skill deleted.", "info");
   };
 
   const moveLevel = async (skill: Skill, level: Skill["proficiency_level"]) => {
     await supabase.from("skills").update({ proficiency_level: level }).eq("id", skill.id);
     setSkills(skills.map((s) => (s.id === skill.id ? { ...s, proficiency_level: level } : s)));
+    toast("Proficiency level updated.", "success");
   };
 
   const grouped = PROFICIENCY_LEVELS.reduce((acc, level) => {
@@ -1559,6 +1729,7 @@ function ProfileManager() {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
     setSaving(false);
+    toast("Profile saved successfully!", "success");
   };
 
   const confirmAddEntry = () => {
@@ -1582,8 +1753,12 @@ function ProfileManager() {
   };
 
   const uploadProfileFile = async (file: File, field: keyof Profile, folder: string) => {
+    toast("Uploading file…", "upload");
     const url = await uploadFile(supabase, file, folder);
-    if (url && profile) setProfile({ ...profile, [field]: url });
+    if (url && profile) {
+      setProfile({ ...profile, [field]: url });
+      toast("File uploaded successfully!", "success");
+    }
   };
 
   if (loading) return <div className="flex justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -1646,6 +1821,29 @@ function ProfileManager() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2"><label className="text-sm font-medium flex items-center gap-1"><Linkedin className="w-3.5 h-3.5" />LinkedIn URL</label><Input value={profile.linkedin || ""} onChange={(e) => setProfile({ ...profile, linkedin: e.target.value })} placeholder="https://linkedin.com/in/..." /></div>
                 <div className="space-y-2"><label className="text-sm font-medium flex items-center gap-1"><Github className="w-3.5 h-3.5" />GitHub URL</label><Input value={profile.github || ""} onChange={(e) => setProfile({ ...profile, github: e.target.value })} placeholder="https://github.com/..." /></div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 inline-flex items-center justify-center">
+                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                  </span>
+                  Availability Status
+                </label>
+                <Select
+                  value={profile.availability_status ?? "none"}
+                  onValueChange={(v) => setProfile({ ...profile, availability_status: v === "none" ? null : v as Profile["availability_status"] })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Not shown —</SelectItem>
+                    <SelectItem value="available">🟢 Open to Work</SelectItem>
+                    <SelectItem value="freelance">🔵 Available for Freelance</SelectItem>
+                    <SelectItem value="employed">🟡 Currently Employed</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Displays a status badge on your hero section. Leave blank to hide it.</p>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
@@ -1766,6 +1964,162 @@ function ProfileManager() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEEDBACK MANAGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface Feedback {
+  id: string;
+  name: string | null;
+  message: string;
+  rating: number;
+  emoji: string;
+  created_at: string;
+}
+
+function FeedbackManager() {
+  const supabase = createClient();
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  useEffect(() => { loadFeedbacks(); }, []);
+
+  async function loadFeedbacks() {
+    setLoading(true);
+    const { data } = await supabase
+      .from("feedbacks")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) setFeedbacks(data);
+    setLoading(false);
+  }
+
+  async function deleteFeedback(id: string) {
+    setDeleting(id);
+    await supabase.from("feedbacks").delete().eq("id", id);
+    setFeedbacks((prev) => prev.filter((f) => f.id !== id));
+    toast("Feedback deleted.", "info");
+    setDeleting(null);
+  }
+
+  const avgRating = feedbacks.length
+    ? (feedbacks.reduce((s, f) => s + f.rating, 0) / feedbacks.length).toFixed(1)
+    : "—";
+
+  const ratingDist = [5, 4, 3, 2, 1].map((r) => ({
+    rating: r,
+    emoji: ["😐","🙂","😊","😍","🤩"][r - 1],
+    count: feedbacks.filter((f) => f.rating === r).length,
+  }));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <MessageCircleHeart className="w-6 h-6 text-primary" />
+            Feedback
+          </h2>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {feedbacks.length} total · ⭐ {avgRating} avg rating
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={loadFeedbacks}>
+          <RefreshCw className="w-4 h-4 mr-2" />Refresh
+        </Button>
+      </div>
+
+      {/* Rating distribution */}
+      <div className="grid grid-cols-5 gap-3">
+        {ratingDist.map(({ rating, emoji, count }) => (
+          <Card key={rating} className="bg-card/50">
+            <CardContent className="p-4 flex flex-col items-center gap-1">
+              <span className="text-2xl">{emoji}</span>
+              <div className="flex gap-0.5">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star key={i} className={`w-2.5 h-2.5 ${i < rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+                ))}
+              </div>
+              <p className="text-xl font-bold leading-none">{count}</p>
+              <p className="text-[10px] text-muted-foreground font-mono">review{count !== 1 ? "s" : ""}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Feedback list */}
+      {feedbacks.length === 0 ? (
+        <Card className="bg-card/50 border-dashed">
+          <CardContent className="text-center py-16">
+            <div className="text-4xl mb-3">💬</div>
+            <p className="text-muted-foreground">No feedback yet.</p>
+            <p className="text-muted-foreground/60 text-sm mt-1">Feedback submitted on your portfolio will appear here.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4">
+          {feedbacks.map((fb) => (
+            <Card key={fb.id} className="bg-card/50 border-border group relative">
+              <CardContent className="p-5">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-xl shrink-0 border border-border">
+                    {fb.emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-semibold text-sm">
+                            {fb.name || <span className="text-muted-foreground italic font-normal">Anonymous</span>}
+                          </span>
+                          <div className="flex gap-0.5">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} className={`w-3 h-3 ${i < fb.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{fb.message}</p>
+                        <p className="text-[11px] text-muted-foreground/50 mt-2 font-mono">
+                          {new Date(fb.created_at).toLocaleString("en-US", {
+                            month: "short", day: "numeric", year: "numeric",
+                            hour: "2-digit", minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => deleteFeedback(fb.id)}
+                        disabled={deleting === fb.id}
+                        title="Delete feedback"
+                      >
+                        {deleting === fb.id
+                          ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />
+                        }
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

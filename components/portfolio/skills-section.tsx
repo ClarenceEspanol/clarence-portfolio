@@ -469,7 +469,7 @@ function SkillsModal({
               {label}
               {key !== "all" && (
                 <span className="ml-1.5 text-xs opacity-70">
-                  ({skills.filter((s) => s.proficiency_level === key).length})
+                  ({skills.filter((s) => (activeCategory === "all" || s.category === activeCategory) && s.proficiency_level === key).length})
                 </span>
               )}
             </button>

@@ -281,24 +281,36 @@ export function AIChatbot() {
   return (
     <>
       {/* Floating trigger button */}
-      <button
-        onClick={() => {
-          setIsOpen(true);
-          setIsMinimized(false);
-          setUnreadCount(0);
-        }}
+      <div
         className={cn(
-          "fixed bottom-8 right-24 z-40 w-14 h-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center transition-all duration-300",
+          "fixed bottom-8 right-24 z-40 group",
           isOpen && "scale-0 opacity-0 pointer-events-none"
         )}
       >
-        <Bot className="w-6 h-6" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center font-bold">
-            {unreadCount}
-          </span>
-        )}
-      </button>
+        {/* Pulse ring */}
+        <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping group-hover:animate-none" />
+        {/* Hover tooltip */}
+        <span className="absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-popover border border-border text-popover-foreground text-xs font-medium px-2.5 py-1.5 shadow-md opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 pointer-events-none">
+          Chat with AI 💬
+          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-border" style={{ marginTop: '-1px' }} />
+          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-popover" />
+        </span>
+        <button
+          onClick={() => {
+            setIsOpen(true);
+            setIsMinimized(false);
+            setUnreadCount(0);
+          }}
+          className="relative w-14 h-14 rounded-full bg-primary text-white shadow-lg flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-primary/40 hover:shadow-xl"
+        >
+          <Bot className="w-6 h-6 transition-transform duration-300 group-hover:rotate-12" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center font-bold">
+              {unreadCount}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* Chat window */}
       <div

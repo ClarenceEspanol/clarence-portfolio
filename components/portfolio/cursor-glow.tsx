@@ -41,12 +41,12 @@ export function CursorGlow() {
       style={{ opacity: isVisible ? 1 : 0 }}
     >
       <div
-        className="absolute w-[600px] h-[600px] rounded-full"
+        className="absolute w-[200px] h-[200px] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, oklch(0.72 0.15 220 / 0.08) 0%, transparent 70%)",
-          transform: `translate(${position.x - 300}px, ${position.y - 300}px)`,
-          transition: "transform 0.15s ease-out",
+            "radial-gradient(circle, oklch(0.72 0.15 220 / 0.05) 0%, transparent 75%)",
+          transform: `translate(${position.x - 100}px, ${position.y - 100}px)`,
+          transition: "transform 0.1s ease-out",
         }}
       />
     </div>
