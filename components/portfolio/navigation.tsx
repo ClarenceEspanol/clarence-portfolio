@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { ThemeToggle } from "./theme-toggle";
 import { getProfile, type Profile } from "@/lib/supabase/data";
+import { useTheme } from "next-themes";
+import { Sun, Moon } from "lucide-react";
 
 const navItems = [
   { name: "Home", href: "#home" },
@@ -13,6 +14,38 @@ const navItems = [
   { name: "Certificates", href: "#certificates" },
   { name: "Contact", href: "#contact" },
 ];
+
+function ThemeToggleButton() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="w-9 h-9" />;
+
+  const isDark = resolvedTheme === "dark";
+
+  return (
+    <button
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="relative p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+      aria-label="Toggle theme"
+    >
+      <Sun
+        className={cn(
+          "h-5 w-5 transition-all duration-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+          isDark ? "opacity-0 rotate-90 scale-0" : "opacity-100 rotate-0 scale-100"
+        )}
+      />
+      <Moon
+        className={cn(
+          "h-5 w-5 transition-all duration-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+          isDark ? "opacity-100 rotate-0 scale-100" : "opacity-0 -rotate-90 scale-0"
+        )}
+      />
+      <span className="invisible">T</span>
+    </button>
+  );
+}
 
 export function Navigation() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -78,7 +111,6 @@ export function Navigation() {
                 showProfileInNav ? "w-8 h-8 opacity-100" : "w-0 opacity-0"
               )}
             >
-              {/* Show real profile picture if available, otherwise initials */}
               {profile?.profile_picture_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -114,13 +146,13 @@ export function Navigation() {
               </a>
             ))}
             <div className="ml-2 border-l border-border pl-2">
-              <ThemeToggle />
+              <ThemeToggleButton />
             </div>
           </div>
 
           {/* Mobile */}
           <div className="flex items-center gap-2 md:hidden">
-            <ThemeToggle />
+            <ThemeToggleButton />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg hover:bg-secondary transition-colors"

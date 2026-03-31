@@ -9,39 +9,28 @@ import { ProjectsSection } from "@/components/portfolio/projects-section";
 import { CertificatesSection } from "@/components/portfolio/certificates-section";
 import { ContactSection } from "@/components/portfolio/contact-section";
 import { Footer } from "@/components/portfolio/footer";
-
+import { AIChatbot } from "@/components/portfolio/ai-chatbot";
 import { KonamiCode } from "@/components/portfolio/konami-code";
 import { ScrollProgress } from "@/components/portfolio/scroll-progress";
 import { BackToTop } from "@/components/portfolio/back-to-top";
 import { LoadingScreen } from "@/components/portfolio/loading-screen";
-import { ThemeProvider } from "@/components/theme-provider";
 
 export default function Portfolio() {
   const [isLoading, setIsLoading] = useState(true);
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="dark"
-      enableSystem
-      disableTransitionOnChange
-    >
+    <>
       {isLoading && <LoadingScreen onComplete={() => setIsLoading(false)} />}
-      
+
       <main
         className={`relative min-h-screen overflow-x-hidden transition-opacity duration-500 ${
           isLoading ? "opacity-0" : "opacity-100"
         }`}
       >
-        {/* Interactive Elements */}
         <KonamiCode />
         <ScrollProgress />
         <BackToTop />
-
-        {/* Navigation */}
         <Navigation />
-
-        {/* Sections */}
         <HeroSection />
         <AboutSection />
         <SkillsSection />
@@ -49,7 +38,8 @@ export default function Portfolio() {
         <CertificatesSection />
         <ContactSection />
         <Footer />
+        <AIChatbot />
       </main>
-    </ThemeProvider>
+    </>
   );
 }

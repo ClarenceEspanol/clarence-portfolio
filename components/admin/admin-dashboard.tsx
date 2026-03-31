@@ -18,7 +18,7 @@ import {
   TrendingUp, Plus, Pencil, GripVertical, ExternalLink, Github,
   Star, Image, Save, MapPin, Linkedin, Briefcase, GraduationCap,
   LogOut, KeyRound, AlertCircle, Upload, X, Eye, EyeOff, Code,
-  BookOpen, FileText,
+  BookOpen, FileText, Bot, Send, ChevronDown, ChevronRight,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,11 +34,12 @@ interface Profile {
   bio: string | null; experience: string | null; education: string | null;
   profile_picture_url: string | null; resume_url: string | null;
   cv_url: string | null; portfolio_pptx_url: string | null;
+  facebook: string | null; instagram: string | null; tiktok: string | null;
 }
 
 interface Skill {
   id: string; name: string; icon: string;
-  category: "frontend" | "backend";
+  category: "frontend" | "backend" | "tools";
   description: string | null;
   proficiency_level: "beginner" | "intermediate" | "experienced" | "expert" | null;
   sort_order: number;
@@ -61,9 +62,38 @@ interface WorkExperience {
   period: string | null; description: string | null; sort_order: number;
 }
 
+interface ChatbotMessage {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant" | "admin";
+  content: string;
+  file_url?: string | null;
+  file_type?: string | null;
+  file_name?: string | null;
+  created_at: string;
+  user_name?: string | null;
+  user_email?: string | null;
+}
+
+interface ChatSession {
+  session_id: string;
+  messages: ChatbotMessage[];
+  lastActivity: string;
+  unread: boolean;
+  /** Resolved from user messages if available */
+  displayName: string;
+  displayEmail: string;
+  isDirectChat: boolean;
+}
+
 // ─── Storage helper ───────────────────────────────────────────────────────────
 
 const BUCKET = "portfolio-assets";
+
+// Only this email is allowed to access the admin dashboard.
+// This prevents any Google-logged-in user from bypassing the admin login.
+// Change this to match the email you use to log into Supabase Admin auth.
+const OWNER_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "clarenceespanol@gmail.com";
 
 async function uploadFile(
   supabase: ReturnType<typeof createClient>,
@@ -129,6 +159,7 @@ export function AdminDashboard() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const [stats, setStats] = useState({ totalMessages: 0, unreadMessages: 0, todayMessages: 0 });
   const [overviewCounts, setOverviewCounts] = useState({ projects: 0, certificates: 0 });
+  const [chatbotSessionCount, setChatbotSessionCount] = useState(0);
 
   const fetchMessages = useCallback(async () => {
     setIsLoadingMessages(true);
@@ -147,12 +178,44 @@ export function AdminDashboard() {
   }, [supabase]);
 
   const fetchCounts = useCallback(async () => {
-    const [{ count: projCount }, { count: certCount }] = await Promise.all([
+    const [{ count: projCount }, { count: certCount }, { data: chatData }] = await Promise.all([
       supabase.from("projects").select("*", { count: "exact", head: true }),
       supabase.from("certificates").select("*", { count: "exact", head: true }),
+      supabase.from("chatbot_conversations").select("session_id"),
     ]);
     setOverviewCounts({ projects: projCount ?? 0, certificates: certCount ?? 0 });
+    const uniqueSessions = new Set((chatData || []).map((r: { session_id: string }) => r.session_id));
+    setChatbotSessionCount(uniqueSessions.size);
   }, [supabase]);
+
+  // ── Owner-only guard ──────────────────────────────────────────────────────
+  // Even if someone is logged in via Google (e.g. from the chat page), they
+  // must not be able to access the admin dashboard. We check the session email
+  // on mount and on any auth change; if it doesn't match OWNER_EMAIL we sign
+  // them out of the admin session and redirect to /admin (login page).
+  useEffect(() => {
+    const checkOwner = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push("/admin");
+        return;
+      }
+      if (session.user.email !== OWNER_EMAIL) {
+        // Signed in, but NOT the owner — boot them out
+        await supabase.auth.signOut();
+        router.push("/admin");
+      }
+    };
+    checkOwner();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session || session.user.email !== OWNER_EMAIL) {
+        router.push("/admin");
+      }
+    });
+    return () => listener.subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => { fetchMessages(); fetchCounts(); }, [fetchMessages, fetchCounts]);
 
@@ -205,7 +268,7 @@ export function AdminDashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-6 w-full max-w-3xl">
+          <TabsList className="grid grid-cols-7 w-full max-w-4xl">
             <TabsTrigger value="overview"><LayoutDashboard className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Overview</span></TabsTrigger>
             <TabsTrigger value="messages" className="relative">
               <MessageSquare className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Messages</span>
@@ -214,6 +277,9 @@ export function AdminDashboard() {
                   {stats.unreadMessages}
                 </span>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="chatbot">
+              <Bot className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Chatbot</span>
             </TabsTrigger>
             <TabsTrigger value="projects"><FolderKanban className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Projects</span></TabsTrigger>
             <TabsTrigger value="certificates"><Award className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Certs</span></TabsTrigger>
@@ -266,6 +332,7 @@ export function AdminDashboard() {
                 <CardContent className="space-y-2">
                   {[
                     { label: "View Messages", icon: <MessageSquare className="w-4 h-4 mr-2" />, tab: "messages", badge: stats.unreadMessages > 0 ? `${stats.unreadMessages} unread` : undefined },
+                    { label: "Chatbot History", icon: <Bot className="w-4 h-4 mr-2" />, tab: "chatbot", badge: chatbotSessionCount > 0 ? `${chatbotSessionCount} sessions` : undefined },
                     { label: "Manage Projects", icon: <FolderKanban className="w-4 h-4 mr-2" />, tab: "projects" },
                     { label: "Add Certificate", icon: <Award className="w-4 h-4 mr-2" />, tab: "certificates" },
                     { label: "Update Profile", icon: <User className="w-4 h-4 mr-2" />, tab: "profile" },
@@ -339,12 +406,380 @@ export function AdminDashboard() {
             </Card>
           </TabsContent>
 
+          {/* ── Chatbot ── */}
+          <TabsContent value="chatbot">
+            <ChatbotManager />
+          </TabsContent>
+
           <TabsContent value="projects"><ProjectsManager /></TabsContent>
           <TabsContent value="certificates"><CertificatesManager /></TabsContent>
           <TabsContent value="skills"><SkillsManager /></TabsContent>
           <TabsContent value="profile"><ProfileManager /></TabsContent>
         </Tabs>
       </main>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHATBOT MANAGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function ChatbotManager() {
+  const supabase = createClient();
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const fetchSessions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase
+        .from("chatbot_conversations")
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      const rows: ChatbotMessage[] = data || [];
+
+      // Group by session_id
+      const sessionMap = new Map<string, ChatbotMessage[]>();
+      for (const row of rows) {
+        if (!sessionMap.has(row.session_id)) sessionMap.set(row.session_id, []);
+        sessionMap.get(row.session_id)!.push(row);
+      }
+
+      const built: ChatSession[] = [];
+      sessionMap.forEach((msgs, session_id) => {
+        // Find user info from user-role messages
+        const userMsg = msgs.find((m) => m.role === "user" && m.user_name);
+        const displayName = userMsg?.user_name ?? `Visitor ${session_id.slice(5, 13)}`;
+        const displayEmail = userMsg?.user_email ?? "";
+        const isDirectChat = session_id.startsWith("user_");
+        built.push({
+          session_id,
+          messages: msgs,
+          lastActivity: msgs[msgs.length - 1]?.created_at ?? "",
+          unread: msgs.some((m) => m.role === "user"),
+          displayName,
+          displayEmail,
+          isDirectChat,
+        });
+      });
+
+      // Sort by most recent activity
+      built.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
+      setSessions(built);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+
+  // Real-time subscription for new chatbot messages
+  useEffect(() => {
+    const channel = supabase
+      .channel("chatbot_admin_watch")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chatbot_conversations" },
+        () => { fetchSessions(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [supabase, fetchSessions]);
+
+  useEffect(() => {
+    if (selectedSession) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [sessions, selectedSession]);
+
+  const sendAdminReply = async () => {
+    if (!selectedSession || !replyText.trim() || sending) return;
+    setSending(true);
+    try {
+      await supabase.from("chatbot_conversations").insert({
+        session_id: selectedSession,
+        role: "admin",
+        content: replyText.trim(),
+        created_at: new Date().toISOString(),
+      });
+      setReplyText("");
+      await fetchSessions();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const deleteSession = async (sessionId: string) => {
+    await supabase.from("chatbot_conversations").delete().eq("session_id", sessionId);
+    setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+    if (selectedSession === sessionId) setSelectedSession(null);
+  };
+
+  const toggleExpand = (sessionId: string) => {
+    setExpandedSessions((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+    setSelectedSession(sessionId);
+  };
+
+  const formatTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const formatSessionDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+  const activeSession = sessions.find((s) => s.session_id === selectedSession);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Bot className="w-6 h-6 text-primary" />
+            Chatbot Conversations
+          </h2>
+          <p className="text-muted-foreground">{sessions.length} session{sessions.length !== 1 ? "s" : ""} total — you can reply directly to visitors</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchSessions} disabled={loading}>
+          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+      ) : sessions.length === 0 ? (
+        <Card className="bg-card/50">
+          <CardContent className="text-center py-16">
+            <Bot className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
+            <h3 className="font-medium text-lg mb-1">No chatbot conversations yet</h3>
+            <p className="text-sm text-muted-foreground">When visitors use the AI chatbot, their conversations will appear here.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-5">
+          {/* Session list */}
+          <div className="lg:col-span-2 space-y-2">
+            {sessions.map((session) => {
+              const lastMsg = session.messages[session.messages.length - 1];
+              const isSelected = selectedSession === session.session_id;
+              const userMsgs = session.messages.filter((m) => m.role === "user").length;
+              return (
+                <div
+                  key={session.session_id}
+                  onClick={() => setSelectedSession(session.session_id)}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    isSelected
+                      ? "bg-primary/10 border-primary/40"
+                      : "bg-card/50 border-border hover:border-primary/30 hover:bg-secondary/30"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-xs font-bold text-primary">
+                        {session.displayName[0]?.toUpperCase() ?? "V"}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-medium truncate">{session.displayName}</p>
+                          {session.isDirectChat && (
+                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 text-primary border-primary/40 shrink-0">Direct</Badge>
+                          )}
+                        </div>
+                        {session.displayEmail && (
+                          <p className="text-[10px] text-muted-foreground truncate">{session.displayEmail}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {lastMsg?.content
+                            ? `${lastMsg.content.slice(0, 45)}${lastMsg.content.length > 45 ? "…" : ""}`
+                            : lastMsg?.file_type === "image" ? "📷 Image"
+                            : lastMsg?.file_type === "video" ? "🎬 Video"
+                            : lastMsg?.file_type === "audio" ? "🎤 Voice message"
+                            : lastMsg?.file_type === "file" ? `📎 ${lastMsg.file_name ?? "File"}`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        {formatDate(session.lastActivity)}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {userMsgs} msg{userMsgs !== 1 ? "s" : ""}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Conversation thread */}
+          <div className="lg:col-span-3">
+            {!activeSession ? (
+              <Card className="bg-card/50 h-full">
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <MessageSquare className="w-10 h-10 mb-3 text-muted-foreground/30" />
+                  <p className="text-sm text-muted-foreground">Select a session to view the conversation</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="bg-card/50 flex flex-col h-full">
+                <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-border">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                        {activeSession.displayName[0]?.toUpperCase() ?? "V"}
+                      </div>
+                      {activeSession.displayName}
+                      {activeSession.isDirectChat && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-primary border-primary/40">Direct Chat</Badge>
+                      )}
+                    </CardTitle>
+                    <CardDescription>
+                      {activeSession.displayEmail && <span className="mr-2">{activeSession.displayEmail} ·</span>}
+                      {activeSession.messages.length} messages · Started {formatSessionDate(activeSession.messages[0]?.created_at)}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive shrink-0"
+                    onClick={() => deleteSession(activeSession.session_id)}
+                    title="Delete session"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </CardHeader>
+
+                {/* Messages */}
+                <CardContent className="flex-1 overflow-y-auto py-4 space-y-3" style={{ maxHeight: 420 }}>
+                  {activeSession.messages.map((msg) => {
+                    const isUser = msg.role === "user";
+                    const isAdmin = msg.role === "admin";
+                    const hasFile = !!msg.file_url;
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex gap-2 ${isUser ? "flex-row-reverse" : "flex-row"}`}
+                      >
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-1 ${
+                          isUser ? "bg-secondary" : isAdmin ? "bg-green-500/20" : "bg-primary/10"
+                        }`}>
+                          {isUser ? (
+                            <User className="w-4 h-4 text-muted-foreground" />
+                          ) : isAdmin ? (
+                            <KeyRound className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <Bot className="w-4 h-4 text-primary" />
+                          )}
+                        </div>
+                        <div className={`max-w-[75%] flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+                          {isAdmin && (
+                            <span className="text-[10px] text-muted-foreground mb-0.5 px-1">Admin reply</span>
+                          )}
+
+                          {/* File / media */}
+                          {hasFile && (
+                            <div className={`mb-1 rounded-2xl overflow-hidden ${isUser ? "rounded-tr-sm" : "rounded-tl-sm"}`}>
+                              {msg.file_type === "image" && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={msg.file_url!}
+                                  alt="Image"
+                                  className="max-w-[200px] max-h-[200px] object-cover rounded-2xl cursor-pointer"
+                                  onClick={() => window.open(msg.file_url!, "_blank")}
+                                />
+                              )}
+                              {msg.file_type === "video" && (
+                                <video src={msg.file_url!} controls className="max-w-[200px] rounded-2xl" />
+                              )}
+                              {msg.file_type === "audio" && (
+                                <div className={`px-3 py-2 rounded-2xl flex items-center gap-2 ${isUser ? "bg-secondary" : "bg-primary/10"}`}>
+                                  <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
+                                  <audio src={msg.file_url!} controls className="h-8 max-w-[160px]" />
+                                </div>
+                              )}
+                              {msg.file_type === "file" && (
+                                <a
+                                  href={msg.file_url!}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl text-sm ${isUser ? "bg-secondary text-foreground" : "bg-primary/10 text-foreground"}`}
+                                >
+                                  <FileText className="w-4 h-4 shrink-0" />
+                                  <span className="truncate max-w-[150px]">{msg.file_name ?? "File"}</span>
+                                </a>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Text */}
+                          {msg.content && (
+                            <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                              isUser
+                                ? "bg-secondary text-foreground rounded-tr-sm"
+                                : isAdmin
+                                ? "bg-green-500/15 border border-green-500/30 text-foreground rounded-tl-sm"
+                                : "bg-primary/10 text-foreground rounded-tl-sm"
+                            }`}>
+                              {msg.content}
+                            </div>
+                          )}
+
+                          <span className="text-[10px] text-muted-foreground mt-1 px-1">
+                            {formatTime(msg.created_at)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
+                </CardContent>
+
+                {/* Admin reply box */}
+                <div className="px-4 py-3 border-t border-border bg-card/50">
+                  <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                    <KeyRound className="w-3 h-3" />
+                    Reply as admin — visitor will see this in real-time
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); }}}
+                      placeholder="Type your reply..."
+                      className="flex-1 text-sm"
+                      disabled={sending}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={sendAdminReply}
+                      disabled={!replyText.trim() || sending}
+                      className="shrink-0"
+                    >
+                      <Send className="w-4 h-4 mr-1.5" />{sending ? "Sending…" : "Reply"}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -581,8 +1016,7 @@ function CertificatesManager() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("all");
-  
-  // Using explicit union type for refs to prevent TS errors in child components
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -628,11 +1062,10 @@ function CertificatesManager() {
     return c.category === filter;
   });
 
-  // FIXED: Prop definition now accepts RefObject<HTMLInputElement | null>
-  const CertForm = ({ cert, setCert, certFileRef }: { 
-    cert: any; 
-    setCert: (c: any) => void; 
-    certFileRef: RefObject<HTMLInputElement | null> 
+  const CertForm = ({ cert, setCert, certFileRef }: {
+    cert: any;
+    setCert: (c: any) => void;
+    certFileRef: RefObject<HTMLInputElement | null>
   }) => (
     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
       <div className="space-y-2"><label className="text-sm font-medium">Title *</label><Input value={cert.title} onChange={(e) => setCert({ ...cert, title: e.target.value })} placeholder="e.g., Google UX Design Certificate" /></div>
@@ -767,6 +1200,43 @@ function CertificatesManager() {
 // SKILLS MANAGER
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Icon color palette for skills preview in admin
+const ICON_COLORS: Record<string, string> = {
+  html: "#E34F26", css: "#1572B6", javascript: "#F7DF1E", typescript: "#3178C6",
+  react: "#61DAFB", nextjs: "#888888", tailwind: "#06B6D4", java: "#ED8B00",
+  python: "#3776AB", cpp: "#00599C", csharp: "#239120", git: "#F05032",
+  docker: "#2496ED", sql: "#336791", php: "#777BB4", wordpress: "#21759B",
+  vbnet: "#5C2D91", database: "#FF6B35", design: "#FF4088", prototype: "#A259FF",
+  docs: "#4A90D9", default: "#6B7280",
+};
+
+function getIconKey(name: string, iconKey?: string): string {
+  const n = name.toLowerCase();
+  const k = (iconKey || "").toLowerCase();
+  if (n.includes("html") || k === "html") return "html";
+  if (n.includes("css") || k === "css") return "css";
+  if ((n.includes("javascript") || n === "js") && !n.includes("type")) return "javascript";
+  if (n.includes("typescript") || k === "typescript") return "typescript";
+  if (n.includes("react")) return "react";
+  if (n.includes("next")) return "nextjs";
+  if (n.includes("tailwind")) return "tailwind";
+  if (n.includes("java") && !n.includes("script")) return "java";
+  if (n.includes("python")) return "python";
+  if (n.includes("c++") || n.includes("cpp")) return "cpp";
+  if (n.includes("c#")) return "csharp";
+  if (n.includes("git")) return "git";
+  if (n.includes("docker")) return "docker";
+  if (n.includes("sql") || n.includes("postgres")) return "sql";
+  if (n.includes("php")) return "php";
+  if (n.includes("wordpress")) return "wordpress";
+  if (n.includes("vb") || n.includes("visual basic")) return "vbnet";
+  if (n.includes("database")) return "database";
+  if (n.includes("ui") || n.includes("ux") || n.includes("design")) return "design";
+  if (n.includes("prototype")) return "prototype";
+  if (n.includes("document") || n.includes("docs")) return "docs";
+  return "default";
+}
+
 const PROFICIENCY_INFO: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   expert:       { label: "Expert",        icon: <Sparkles className="w-4 h-4" />, color: "bg-primary/20 text-primary" },
   experienced:  { label: "Experienced",   icon: <TrendingUp className="w-4 h-4" />, color: "bg-accent/20 text-accent-foreground" },
@@ -774,13 +1244,51 @@ const PROFICIENCY_INFO: Record<string, { label: string; icon: React.ReactNode; c
   beginner:     { label: "Learning",      icon: <BookOpen className="w-4 h-4" />, color: "bg-muted text-muted-foreground" },
 };
 
+const ICON_KEYS = [
+  // Frontend
+  { value: "html",        label: "HTML" },
+  { value: "css",         label: "CSS" },
+  { value: "javascript",  label: "JavaScript" },
+  { value: "typescript",  label: "TypeScript" },
+  { value: "react",       label: "React" },
+  { value: "nextjs",      label: "Next.js" },
+  { value: "tailwind",    label: "Tailwind CSS" },
+  { value: "design",      label: "UI/UX Design" },
+  { value: "prototype",   label: "Prototyping" },
+  { value: "docs",        label: "Documentation" },
+  // Backend
+  { value: "java",        label: "Java" },
+  { value: "python",      label: "Python" },
+  { value: "cpp",         label: "C++" },
+  { value: "csharp",      label: "C#" },
+  { value: "php",         label: "PHP" },
+  { value: "vbnet",       label: "VB.NET" },
+  { value: "sql",         label: "SQL / PostgreSQL" },
+  { value: "database",    label: "Database Integration" },
+  { value: "wordpress",   label: "WordPress" },
+  // Tools & Others
+  { value: "git",         label: "Git" },
+  { value: "docker",      label: "Docker" },
+  { value: "figma",       label: "Figma" },
+  { value: "vscode",      label: "VS Code" },
+  { value: "postman",     label: "Postman" },
+  { value: "linux",       label: "Linux" },
+  { value: "aws",         label: "AWS" },
+  { value: "firebase",    label: "Firebase" },
+  { value: "vercel",      label: "Vercel" },
+  { value: "github",      label: "GitHub" },
+  // Generic
+  { value: "code",        label: "Generic / Code" },
+];
+
 function SkillsManager() {
   const supabase = createClient();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [newSkill, setNewSkill] = useState({ name: "", icon: "code", category: "frontend" as "frontend" | "backend", proficiency_level: "intermediate" as Skill["proficiency_level"], description: "" });
+  const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
+  const [newSkill, setNewSkill] = useState({ name: "", icon: "code", category: "frontend" as "frontend" | "backend" | "tools", proficiency_level: "intermediate" as Skill["proficiency_level"], description: "" });
 
   useEffect(() => {
     supabase.from("skills").select("*").order("sort_order").then(({ data }) => { setSkills(data || []); setLoading(false); });
@@ -789,10 +1297,35 @@ function SkillsManager() {
   const handleAdd = async () => {
     if (!newSkill.name) return;
     setSaving(true);
-    const { data } = await supabase.from("skills").insert([{ ...newSkill, description: newSkill.description || null, sort_order: skills.length }]).select().single();
-    if (data) setSkills([...skills, data]);
-    setNewSkill({ name: "", icon: "code", category: "frontend", proficiency_level: "intermediate", description: "" });
-    setIsAddOpen(false); setSaving(false);
+    try {
+      const payload = {
+        name: newSkill.name,
+        icon: newSkill.icon,
+        category: newSkill.category,
+        proficiency_level: newSkill.proficiency_level,
+        description: newSkill.description.trim() || null,
+        sort_order: skills.length,
+      };
+      const { data, error } = await supabase.from("skills").insert(payload).select().single();
+      if (error) { console.error("Insert error:", error); setSaving(false); return; }
+      if (data) setSkills([...skills, data]);
+      setNewSkill({ name: "", icon: "code", category: "frontend", proficiency_level: "intermediate", description: "" });
+      setIsAddOpen(false);
+    } finally { setSaving(false); }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingSkill) return;
+    setSaving(true);
+    await supabase.from("skills").update({
+      name: editingSkill.name,
+      icon: editingSkill.icon,
+      category: editingSkill.category,
+      proficiency_level: editingSkill.proficiency_level,
+      description: editingSkill.description || null,
+    }).eq("id", editingSkill.id);
+    setSkills(skills.map((s) => (s.id === editingSkill.id ? editingSkill : s)));
+    setEditingSkill(null); setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -820,13 +1353,25 @@ function SkillsManager() {
             <DialogHeader><DialogTitle>Add New Skill</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2"><label className="text-sm font-medium">Skill Name *</label><Input value={newSkill.name} onChange={(e) => setNewSkill({ ...newSkill, name: e.target.value })} placeholder="e.g., React, Python, Figma" /></div>
-              <div className="space-y-2"><label className="text-sm font-medium">Icon key</label><Input value={newSkill.icon} onChange={(e) => setNewSkill({ ...newSkill, icon: e.target.value })} placeholder="e.g., react, nodejs, figma" /></div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Icon</label>
+                <Select value={newSkill.icon} onValueChange={(v) => setNewSkill({ ...newSkill, icon: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select icon..." /></SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {ICON_KEYS.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Category</label>
-                  <Select value={newSkill.category} onValueChange={(v) => setNewSkill({ ...newSkill, category: v as "frontend" | "backend" })}>
+                  <Select value={newSkill.category} onValueChange={(v) => setNewSkill({ ...newSkill, category: v as "frontend" | "backend" | "tools" })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="frontend">Frontend</SelectItem><SelectItem value="backend">Backend</SelectItem></SelectContent>
+                    <SelectContent>
+                      <SelectItem value="frontend">Frontend</SelectItem>
+                      <SelectItem value="backend">Backend</SelectItem>
+                      <SelectItem value="tools">Tools & Others</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
@@ -861,10 +1406,16 @@ function SkillsManager() {
                 {(grouped[level] || []).map((skill) => (
                   <div key={skill.id} className="flex items-center justify-between p-2 rounded-lg bg-secondary/50 group">
                     <div className="flex items-center gap-2">
-                      <Code className="w-4 h-4 text-muted-foreground" />
-                      <div><p className="text-sm font-medium">{skill.name}</p><p className="text-xs text-muted-foreground">{skill.category}</p></div>
+                      <div className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground shrink-0"
+                        style={{ background: `${ICON_COLORS[getIconKey(skill.name, skill.icon)]}18` }}>
+                        <span style={{ color: ICON_COLORS[getIconKey(skill.name, skill.icon)] }} className="text-[10px] font-bold">
+                          {skill.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      <div><p className="text-sm font-medium">{skill.name}</p><p className="text-xs text-muted-foreground capitalize">{skill.category}</p></div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSkill(skill)}><Pencil className="w-3 h-3" /></Button>
                       <Select value={level} onValueChange={(v) => moveLevel(skill, v as Skill["proficiency_level"])}>
                         <SelectTrigger className="h-7 w-7 p-0 border-0 bg-transparent"><TrendingUp className="w-3 h-3" /></SelectTrigger>
                         <SelectContent>{PROFICIENCY_LEVELS.map((l) => <SelectItem key={l} value={l} disabled={l === level}>→ {PROFICIENCY_INFO[l].label}</SelectItem>)}</SelectContent>
@@ -879,6 +1430,63 @@ function SkillsManager() {
           ))}
         </div>
       )}
+
+      {/* Edit Skill Dialog */}
+      <Dialog open={!!editingSkill} onOpenChange={(open) => { if (!open) setEditingSkill(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Skill</DialogTitle>
+            <DialogDescription>Modify the skill details. Changes are saved to the database.</DialogDescription>
+          </DialogHeader>
+          {editingSkill && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Skill Name *</label>
+                <Input value={editingSkill.name} onChange={(e) => setEditingSkill({ ...editingSkill, name: e.target.value })} placeholder="e.g., React, Python, Figma" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Icon</label>
+                <Select value={editingSkill.icon} onValueChange={(v) => setEditingSkill({ ...editingSkill, icon: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select icon..." /></SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {ICON_KEYS.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Category</label>
+                  <Select value={editingSkill.category} onValueChange={(v) => setEditingSkill({ ...editingSkill, category: v as "frontend" | "backend" | "tools" })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="frontend">Frontend</SelectItem>
+                      <SelectItem value="backend">Backend</SelectItem>
+                      <SelectItem value="tools">Tools & Others</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Proficiency</label>
+                  <Select value={editingSkill.proficiency_level || "intermediate"} onValueChange={(v) => setEditingSkill({ ...editingSkill, proficiency_level: v as Skill["proficiency_level"] })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PROFICIENCY_LEVELS.map((l) => <SelectItem key={l} value={l}>{PROFICIENCY_INFO[l].label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Description (optional)</label>
+                <Textarea value={editingSkill.description || ""} onChange={(e) => setEditingSkill({ ...editingSkill, description: e.target.value })} placeholder="Short description..." rows={3} className="resize-none" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+            <Button onClick={handleUpdate} disabled={saving || !editingSkill?.name}>{saving ? "Saving..." : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -895,7 +1503,6 @@ function ProfileManager() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Modal State for adding work experience
   const [isExpModalOpen, setIsExpModalOpen] = useState(false);
   const [newExp, setNewExp] = useState<Omit<WorkExperience, "id" | "sort_order">>({
     title: "", role: "", period: "", description: ""
@@ -922,32 +1529,22 @@ function ProfileManager() {
     const { id, ...rest } = profile;
     await supabase.from("profile").update(rest).eq("id", id);
 
-    // Upsert work experience entries individually (preserves existing IDs)
     for (let i = 0; i < workExperience.length; i++) {
       const exp = workExperience[i];
       const isNew = exp.id.startsWith("new-");
       if (isNew) {
-        // Insert new entry, let DB generate id
         await supabase.from("work_experience").insert({
-          title: exp.title,
-          role: exp.role || null,
-          period: exp.period || null,
-          description: exp.description || null,
-          sort_order: i,
+          title: exp.title, role: exp.role || null, period: exp.period || null,
+          description: exp.description || null, sort_order: i,
         });
       } else {
-        // Update existing
         await supabase.from("work_experience").update({
-          title: exp.title,
-          role: exp.role || null,
-          period: exp.period || null,
-          description: exp.description || null,
-          sort_order: i,
+          title: exp.title, role: exp.role || null, period: exp.period || null,
+          description: exp.description || null, sort_order: i,
         }).eq("id", exp.id);
       }
     }
 
-    // Delete entries that were removed from state (only non-new ones)
     const { data: existingInDb } = await supabase.from("work_experience").select("id");
     const currentRealIds = new Set(workExperience.filter((e) => !e.id.startsWith("new-")).map((e) => e.id));
     for (const row of (existingInDb || [])) {
@@ -956,7 +1553,6 @@ function ProfileManager() {
       }
     }
 
-    // Re-fetch so new entries get their real DB ids
     const { data: freshWork } = await supabase.from("work_experience").select("*").order("sort_order");
     setWorkExperience(freshWork || []);
 
@@ -965,18 +1561,12 @@ function ProfileManager() {
     setSaving(false);
   };
 
-  /** Adds entry to local state from modal data */
   const confirmAddEntry = () => {
     if (!newExp.title) return;
     setWorkExperience((prev) => [
       ...prev,
-      {
-        ...newExp,
-        id: `new-${Date.now()}`,
-        sort_order: prev.length,
-      },
+      { ...newExp, id: `new-${Date.now()}`, sort_order: prev.length },
     ]);
-    // Reset and close modal
     setNewExp({ title: "", role: "", period: "", description: "" });
     setIsExpModalOpen(false);
   };
@@ -1057,6 +1647,29 @@ function ProfileManager() {
                 <div className="space-y-2"><label className="text-sm font-medium flex items-center gap-1"><Linkedin className="w-3.5 h-3.5" />LinkedIn URL</label><Input value={profile.linkedin || ""} onChange={(e) => setProfile({ ...profile, linkedin: e.target.value })} placeholder="https://linkedin.com/in/..." /></div>
                 <div className="space-y-2"><label className="text-sm font-medium flex items-center gap-1"><Github className="w-3.5 h-3.5" />GitHub URL</label><Input value={profile.github || ""} onChange={(e) => setProfile({ ...profile, github: e.target.value })} placeholder="https://github.com/..." /></div>
               </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                    Facebook URL
+                  </label>
+                  <Input value={profile.facebook || ""} onChange={(e) => setProfile({ ...profile, facebook: e.target.value })} placeholder="https://facebook.com/..." />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                    Instagram URL
+                  </label>
+                  <Input value={profile.instagram || ""} onChange={(e) => setProfile({ ...profile, instagram: e.target.value })} placeholder="https://instagram.com/..." />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.21 8.21 0 004.79 1.52V6.75a4.85 4.85 0 01-1.02-.06z"/></svg>
+                    TikTok URL
+                  </label>
+                  <Input value={profile.tiktok || ""} onChange={(e) => setProfile({ ...profile, tiktok: e.target.value })} placeholder="https://tiktok.com/@..." />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -1086,7 +1699,7 @@ function ProfileManager() {
               <CardTitle className="text-base">Work Experience Timeline</CardTitle>
               <CardDescription>Manage your detailed work history</CardDescription>
             </div>
-            
+
             <Dialog open={isExpModalOpen} onOpenChange={setIsExpModalOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -1101,36 +1714,19 @@ function ProfileManager() {
                 <div className="space-y-4 py-2">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Company / Project *</label>
-                    <Input 
-                      value={newExp.title} 
-                      onChange={(e) => setNewExp({...newExp, title: e.target.value})} 
-                      placeholder="e.g. Acme Corp" 
-                    />
+                    <Input value={newExp.title} onChange={(e) => setNewExp({...newExp, title: e.target.value})} placeholder="e.g. Acme Corp" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Role</label>
-                    <Input 
-                      value={newExp.role || ""} 
-                      onChange={(e) => setNewExp({...newExp, role: e.target.value})} 
-                      placeholder="e.g. Lead Developer" 
-                    />
+                    <Input value={newExp.role || ""} onChange={(e) => setNewExp({...newExp, role: e.target.value})} placeholder="e.g. Lead Developer" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Period</label>
-                    <Input 
-                      value={newExp.period || ""} 
-                      onChange={(e) => setNewExp({...newExp, period: e.target.value})} 
-                      placeholder="e.g. 2022 - Present" 
-                    />
+                    <Input value={newExp.period || ""} onChange={(e) => setNewExp({...newExp, period: e.target.value})} placeholder="e.g. 2022 - Present" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Description</label>
-                    <Textarea 
-                      value={newExp.description || ""} 
-                      onChange={(e) => setNewExp({...newExp, description: e.target.value})} 
-                      placeholder="Briefly describe your achievements..."
-                      rows={3}
-                    />
+                    <Textarea value={newExp.description || ""} onChange={(e) => setNewExp({...newExp, description: e.target.value})} placeholder="Briefly describe your achievements..." rows={3} />
                   </div>
                 </div>
                 <DialogFooter>
@@ -1156,18 +1752,9 @@ function ProfileManager() {
                     </Button>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium">Company *</label>
-                      <Input value={exp.title} onChange={(e) => updateEntry(i, "title", e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium">Role</label>
-                      <Input value={exp.role || ""} onChange={(e) => updateEntry(i, "role", e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium">Period</label>
-                      <Input value={exp.period || ""} onChange={(e) => updateEntry(i, "period", e.target.value)} />
-                    </div>
+                    <div className="space-y-1"><label className="text-xs font-medium">Company *</label><Input value={exp.title} onChange={(e) => updateEntry(i, "title", e.target.value)} /></div>
+                    <div className="space-y-1"><label className="text-xs font-medium">Role</label><Input value={exp.role || ""} onChange={(e) => updateEntry(i, "role", e.target.value)} /></div>
+                    <div className="space-y-1"><label className="text-xs font-medium">Period</label><Input value={exp.period || ""} onChange={(e) => updateEntry(i, "period", e.target.value)} /></div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs font-medium">Description</label>

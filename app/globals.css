@@ -1,6 +1,9 @@
+/* stylelint-disable at-rule-no-unknown */
+/* postcss-ignore-next-line */
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* @custom-variant is a Tailwind v4 at-rule — linter safe to ignore */
 @custom-variant dark (&:is(.dark *));
 
 /* Light mode - Minimalist cyan theme with gray/black */
@@ -76,6 +79,16 @@
   --sidebar-ring: oklch(0.65 0.12 195);
 }
 
+/*
+  @theme inline — Tailwind v4 at-rule (not standard CSS).
+  VS Code / stylelint will flag this as unknown. This is expected behaviour
+  with Tailwind v4. The project compiles fine; these are IDE/linter warnings only.
+  Fix: add the following to your .vscode/settings.json:
+    "css.customData": ["./node_modules/tailwindcss/css-custom-data.json"]
+  Or add a .stylelintrc.json with:
+    { "rules": { "at-rule-no-unknown": [true, { "ignoreAtRules": ["theme", "apply", "custom-variant"] }] } }
+*/
+/* stylelint-disable-next-line at-rule-no-unknown */
 @theme inline {
   --font-sans: 'Geist', 'Geist Fallback';
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
@@ -117,11 +130,14 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* stylelint-disable-next-line at-rule-no-unknown */
 @layer base {
   * {
+    /* stylelint-disable-next-line at-rule-no-unknown */
     @apply border-border outline-ring/50;
   }
   body {
+    /* stylelint-disable-next-line at-rule-no-unknown */
     @apply bg-background text-foreground;
   }
 }
@@ -164,36 +180,18 @@
 }
 
 @keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fade-in-scale {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes loader-pulse {
-  0%, 100% { 
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% { 
-    transform: scale(1.5);
-    opacity: 0.5;
-  }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
 }
 
 @keyframes loader-spin {
@@ -202,69 +200,23 @@
 }
 
 @keyframes slide-up-fade {
-  from {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-.animate-float-delayed {
-  animation: float 6s ease-in-out infinite;
-  animation-delay: 2s;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
-}
-
-.animate-gradient {
-  background-size: 200% 200%;
-  animation: gradient-shift 8s ease infinite;
-}
-
-.animate-scroll-left {
-  animation: scroll-left 18s linear infinite;
-}
-
-.animate-scroll-right {
-  animation: scroll-right 18s linear infinite;
-}
-
-.animate-scroll-left-seamless {
-  animation: scroll-left-seamless 12s linear infinite;
-}
-
-.animate-scroll-right-seamless {
-  animation: scroll-right-seamless 12s linear infinite;
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.6s ease-out forwards;
-}
-
-.animate-fade-in-scale {
-  animation: fade-in-scale 0.5s ease-out forwards;
-}
-
-.animate-loader-pulse {
-  animation: loader-pulse 1.5s ease-in-out infinite;
-}
-
-.animate-loader-spin {
-  animation: loader-spin 1s linear infinite;
-}
-
-.animate-slide-up-fade {
-  animation: slide-up-fade 0.8s ease-out forwards;
-}
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-float-delayed { animation: float 6s ease-in-out infinite; animation-delay: 2s; }
+.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-gradient { background-size: 200% 200%; animation: gradient-shift 8s ease infinite; }
+.animate-scroll-left { animation: scroll-left 18s linear infinite; }
+.animate-scroll-right { animation: scroll-right 18s linear infinite; }
+.animate-scroll-left-seamless { animation: scroll-left-seamless 12s linear infinite; }
+.animate-scroll-right-seamless { animation: scroll-right-seamless 12s linear infinite; }
+.animate-fade-in-up { animation: fade-in-up 0.6s ease-out forwards; }
+.animate-fade-in-scale { animation: fade-in-scale 0.5s ease-out forwards; }
+.animate-loader-pulse { animation: loader-pulse 1.5s ease-in-out infinite; }
+.animate-loader-spin { animation: loader-spin 1s linear infinite; }
+.animate-slide-up-fade { animation: slide-up-fade 0.8s ease-out forwards; }
 
 .glass {
   backdrop-filter: blur(12px);
@@ -284,250 +236,100 @@
   transform: translateY(30px);
   transition: opacity 0.6s ease-out, transform 0.6s ease-out;
 }
-
-.scroll-animate.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+.scroll-animate.visible { opacity: 1; transform: translateY(0); }
 
 /* Smooth scrollbar - Dark mode */
-.dark ::-webkit-scrollbar {
-  width: 6px;
-}
-
-.dark ::-webkit-scrollbar-track {
-  background: oklch(0.12 0.01 200);
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: oklch(0.30 0.01 200);
-  border-radius: 3px;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.55 0.10 195);
-}
+.dark ::-webkit-scrollbar { width: 6px; }
+.dark ::-webkit-scrollbar-track { background: oklch(0.12 0.01 200); }
+.dark ::-webkit-scrollbar-thumb { background: oklch(0.30 0.01 200); border-radius: 3px; }
+.dark ::-webkit-scrollbar-thumb:hover { background: oklch(0.55 0.10 195); }
 
 /* Smooth scrollbar - Light mode */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: oklch(0.96 0.005 200);
-}
-
-::-webkit-scrollbar-thumb {
-  background: oklch(0.80 0.01 200);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.55 0.10 195);
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: oklch(0.96 0.005 200); }
+::-webkit-scrollbar-thumb { background: oklch(0.80 0.01 200); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: oklch(0.55 0.10 195); }
 
 /* Pause animation on hover */
 .pause-on-hover:hover .animate-scroll-left,
-.pause-on-hover:hover .animate-scroll-right {
-  animation-play-state: paused;
-}
+.pause-on-hover:hover .animate-scroll-right { animation-play-state: paused; }
 
-/* Enhanced Loading Screen Animations */
+/* ── Loading Screen Animations ── */
 @keyframes loading-exit {
-  0% {
-    opacity: 1;
-    transform: scale(1);
-    clip-path: circle(100% at 50% 50%);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.1);
-    clip-path: circle(0% at 50% 50%);
-  }
+  0% { opacity: 1; transform: scale(1); clip-path: circle(100% at 50% 50%); }
+  100% { opacity: 0; transform: scale(1.1); clip-path: circle(0% at 50% 50%); }
 }
-
 @keyframes loading-orb-1 {
   0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
   33% { transform: translate(30px, -20px) scale(1.1); opacity: 0.5; }
   66% { transform: translate(-20px, 30px) scale(0.9); opacity: 0.4; }
 }
-
 @keyframes loading-orb-2 {
   0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
   33% { transform: translate(-25px, 25px) scale(0.9); opacity: 0.4; }
   66% { transform: translate(25px, -15px) scale(1.15); opacity: 0.5; }
 }
-
 @keyframes loading-orb-3 {
   0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.2; }
   50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.4; }
 }
-
 @keyframes loading-scan {
   0% { transform: translateY(-100vh); }
   100% { transform: translateY(100vh); }
 }
-
-@keyframes loading-particle {
-  0%, 100% { 
-    opacity: 0.3;
-    transform: rotate(var(--rotation, 0deg)) translateY(-60px) scale(0.8);
-  }
-  50% { 
-    opacity: 1;
-    transform: rotate(var(--rotation, 0deg)) translateY(-70px) scale(1.2);
-  }
-}
-
 @keyframes loading-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.05); opacity: 0.8; }
 }
-
 @keyframes loading-glow {
   0%, 100% { opacity: 0.3; transform: scale(1); }
   50% { opacity: 0.6; transform: scale(1.1); }
 }
-
 @keyframes loading-text-reveal {
-  0% { 
-    opacity: 0;
-    transform: translateY(20px);
-    filter: blur(10px);
-  }
-  100% { 
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
+  0% { opacity: 0; transform: translateY(20px); filter: blur(10px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
-
 @keyframes loading-shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(700%); }
 }
-
 @keyframes loading-code-left {
   0% { opacity: 0; transform: translateX(-20px); }
   100% { opacity: 1; transform: translateX(0); }
 }
-
 @keyframes loading-code-right {
   0% { opacity: 0; transform: translateX(20px); }
   100% { opacity: 1; transform: translateX(0); }
 }
-
 @keyframes spin-reverse {
   from { transform: rotate(360deg); }
   to { transform: rotate(0deg); }
 }
 
-.animate-loading-exit {
-  animation: loading-exit 0.8s ease-in-out forwards;
-}
+.animate-loading-exit { animation: loading-exit 0.8s ease-in-out forwards; }
+.animate-loading-orb-1 { animation: loading-orb-1 6s ease-in-out infinite; }
+.animate-loading-orb-2 { animation: loading-orb-2 7s ease-in-out infinite; }
+.animate-loading-orb-3 { animation: loading-orb-3 4s ease-in-out infinite; }
+.animate-loading-scan { animation: loading-scan 3s linear infinite; }
+.animate-loading-pulse { animation: loading-pulse 2s ease-in-out infinite; }
+.animate-loading-glow { animation: loading-glow 2s ease-in-out infinite; }
+.animate-loading-text-reveal { animation: loading-text-reveal 0.8s ease-out forwards; }
+.animate-loading-shimmer { animation: loading-shimmer 2s ease-in-out infinite; }
+.animate-loading-code-left { animation: loading-code-left 1s ease-out 0.5s both; }
+.animate-loading-code-right { animation: loading-code-right 1s ease-out 0.7s both; }
+.animate-spin-reverse { animation: spin-reverse 1s linear infinite; }
 
-.animate-loading-orb-1 {
-  animation: loading-orb-1 6s ease-in-out infinite;
-}
-
-.animate-loading-orb-2 {
-  animation: loading-orb-2 7s ease-in-out infinite;
-}
-
-.animate-loading-orb-3 {
-  animation: loading-orb-3 4s ease-in-out infinite;
-}
-
-.animate-loading-scan {
-  animation: loading-scan 3s linear infinite;
-}
-
-.animate-loading-pulse {
-  animation: loading-pulse 2s ease-in-out infinite;
-}
-
-.animate-loading-glow {
-  animation: loading-glow 2s ease-in-out infinite;
-}
-
-.animate-loading-text-reveal {
-  animation: loading-text-reveal 0.8s ease-out forwards;
-}
-
-.animate-loading-shimmer {
-  animation: loading-shimmer 2s ease-in-out infinite;
-}
-
-.animate-loading-code-left {
-  animation: loading-code-left 1s ease-out 0.5s both;
-}
-
-.animate-loading-code-right {
-  animation: loading-code-right 1s ease-out 0.7s both;
-}
-
-.animate-spin-reverse {
-  animation: spin-reverse 1s linear infinite;
-}
-
-/* ─────────────────────────────────────────────────────────────────
-   PRINT STYLES  — paste this block at the bottom of globals.css
-   Used by the "Portfolio (Print / Save PDF)" button in the hero.
-   ───────────────────────────────────────────────────────────────── */
+/* ─── PRINT STYLES ─────────────────────────────────────────────────────────── */
 @media print {
-  /* Hide things that don't belong in a printed portfolio */
-  header,
-  nav,
-  .no-print,
-  button,
-  [role="button"],
-  [data-radix-popper-content-wrapper] {
+  header, nav, .no-print, button, [role="button"], [data-radix-popper-content-wrapper] {
     display: none !important;
   }
-
-  /* Remove background colours / images to save ink and avoid black pages */
-  * {
-    background: white !important;
-    color: black !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-  }
-
-  /* Make links show their URL so they're still useful in print */
-  a[href]::after {
-    content: " (" attr(href) ")";
-    font-size: 0.7em;
-    color: #555 !important;
-  }
-
-  /* Don't add URL after anchor links (they're just section jumps) */
-  a[href^="#"]::after {
-    content: "";
-  }
-
-  /* Give each major section a page break hint */
-  section {
-    page-break-inside: avoid;
-    padding: 1rem 0 !important;
-  }
-
-  /* Reset full-screen hero height so it doesn't waste a whole page */
-  #home {
-    min-height: unset !important;
-    height: auto !important;
-  }
-
-  /* Make sure images & cards still render */
-  img {
-    max-width: 100% !important;
-  }
-
-  body {
-    font-size: 12pt;
-    line-height: 1.4;
-  }
-
-  @page {
-    margin: 1.5cm;
-  }
+  * { background: white !important; color: black !important; box-shadow: none !important; text-shadow: none !important; }
+  a[href]::after { content: " (" attr(href) ")"; font-size: 0.7em; color: #555 !important; }
+  a[href^="#"]::after { content: ""; }
+  section { page-break-inside: avoid; padding: 1rem 0 !important; }
+  #home { min-height: unset !important; height: auto !important; }
+  img { max-width: 100% !important; }
+  body { font-size: 12pt; line-height: 1.4; }
+  @page { margin: 1.5cm; }
 }

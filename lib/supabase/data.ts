@@ -15,13 +15,16 @@ export interface Profile {
   resume_url: string | null;
   cv_url: string | null;
   portfolio_pptx_url: string | null;
+  facebook: string | null;
+  instagram: string | null;
+  tiktok: string | null;
 }
 
 export interface Skill {
   id: string;
   name: string;
   icon: string;
-  category: "frontend" | "backend";
+  category: "frontend" | "backend" | "tools";
   description: string | null;
   proficiency_level: "beginner" | "intermediate" | "experienced" | "expert" | null;
   sort_order: number;

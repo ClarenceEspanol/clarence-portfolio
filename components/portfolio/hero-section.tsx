@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, Globe } from "lucide-react";
 import {
@@ -18,9 +18,53 @@ const roles = [
   "Problem Solver",
 ];
 
+function TypewriterRole() {
+  const [displayText, setDisplayText] = useState("");
+  const [roleIndex, setRoleIndex] = useState(0);
+  const [phase, setPhase] = useState<"typing" | "pause" | "erasing">("typing");
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const currentRole = roles[roleIndex];
+
+    if (phase === "typing") {
+      if (displayText.length < currentRole.length) {
+        timeoutRef.current = setTimeout(() => {
+          setDisplayText(currentRole.slice(0, displayText.length + 1));
+        }, 80);
+      } else {
+        timeoutRef.current = setTimeout(() => setPhase("pause"), 1800);
+      }
+    } else if (phase === "pause") {
+      timeoutRef.current = setTimeout(() => setPhase("erasing"), 400);
+    } else if (phase === "erasing") {
+      if (displayText.length > 0) {
+        timeoutRef.current = setTimeout(() => {
+          setDisplayText(displayText.slice(0, -1));
+        }, 40);
+      } else {
+        setRoleIndex((prev) => (prev + 1) % roles.length);
+        setPhase("typing");
+      }
+    }
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [displayText, phase, roleIndex]);
+
+  return (
+    <div className="h-12 mb-8 flex items-center justify-center">
+      <span className="mx-2 text-xl sm:text-2xl md:text-3xl font-medium text-muted-foreground min-w-[2ch]">
+        {displayText}
+        <span className="inline-block w-0.5 h-6 bg-primary ml-0.5 align-middle animate-pulse" />
+      </span>
+    </div>
+  );
+}
+
 export function HeroSection() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [currentRole, setCurrentRole] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -31,14 +75,6 @@ export function HeroSection() {
 
   useEffect(() => {
     setMounted(true);
-    const interval = setInterval(() => {
-      setCurrentRole((prev) => (prev + 1) % roles.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
     const handleMouseMove = (e: MouseEvent) => {
       setMousePosition({
         x: (e.clientX / window.innerWidth - 0.5) * 20,
@@ -47,7 +83,7 @@ export function HeroSection() {
     };
     window.addEventListener("mousemove", handleMouseMove);
     return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [mounted]);
+  }, []);
 
   const initials = profile?.name
     ? profile.name.split(" ").map((n) => n[0]).join("")
@@ -56,15 +92,8 @@ export function HeroSection() {
   const resumeUrl = profile?.resume_url ?? "/resume.pdf";
   const cvUrl = profile?.cv_url ?? "/cv.pdf";
 
-  /**
-   * Auto-generate a PDF of the full portfolio page using the browser's
-   * native print dialog (Ctrl/Cmd+P → Save as PDF).
-   * The print stylesheet in globals.css / layout handles hiding the admin
-   * bar and other non-print elements.
-   */
   const handlePrintPortfolio = () => {
     setIsPrinting(true);
-    // Small delay so the button state updates before the dialog freezes the UI
     setTimeout(() => {
       window.print();
       setIsPrinting(false);
@@ -135,24 +164,8 @@ export function HeroSection() {
           <span className="text-gradient">{profile?.name ?? "Clarence Espanol"}</span>
         </h1>
 
-        {/* Animated Role */}
-        <div className="h-12 mb-8 overflow-hidden">
-          <div
-            className="transition-transform duration-500 ease-out"
-            style={{ transform: `translateY(-${currentRole * 48}px)` }}
-          >
-            {roles.map((role) => (
-              <div
-                key={role}
-                className="h-12 flex items-center justify-center text-xl sm:text-2xl md:text-3xl font-medium text-muted-foreground"
-              >
-                <span className="font-mono text-primary">&lt;</span>
-                <span className="mx-2">{role}</span>
-                <span className="font-mono text-primary">/&gt;</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Typewriter Role */}
+        <TypewriterRole />
 
         {/* CTA Buttons */}
         <div className="flex flex-wrap items-center justify-center gap-4">
@@ -185,27 +198,21 @@ export function HeroSection() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="w-56">
-              {/* Resume — from Supabase or /public fallback */}
               <DropdownMenuItem asChild>
                 <a href={resumeUrl} download className="cursor-pointer">
                   <FileText className="w-4 h-4 mr-2" />
                   Resume (PDF)
                 </a>
               </DropdownMenuItem>
-
-              {/* CV — from Supabase or /public fallback */}
               <DropdownMenuItem asChild>
                 <a href={cvUrl} download className="cursor-pointer">
                   <FileText className="w-4 h-4 mr-2" />
                   CV (PDF)
                 </a>
               </DropdownMenuItem>
-
-              {/* Portfolio — auto-generates a PDF of this full webpage via browser print */}
               <DropdownMenuItem
                 className="cursor-pointer"
                 onSelect={(e) => {
-                  // Prevent the dropdown from closing before print fires
                   e.preventDefault();
                   handlePrintPortfolio();
                 }}
@@ -216,15 +223,6 @@ export function HeroSection() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-
-        {/* Scroll Indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <a href="#about" className="block p-2 text-muted-foreground hover:text-primary transition-colors">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-            </svg>
-          </a>
         </div>
       </div>
     </section>
