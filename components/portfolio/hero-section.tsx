@@ -102,7 +102,6 @@ interface PortfolioData {
 async function generatePortfolioPptx(data: PortfolioData): Promise<void> {
   const { profile, skills, projects, certs } = data;
 
-  // Self-contained HTML that loads PptxGenJS from CDN and auto-generates
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -138,8 +137,8 @@ async function generatePortfolioPptx(data: PortfolioData): Promise<void> {
         bio: profile.bio ?? "",
         experience: profile.experience ?? "",
         education: profile.education ?? "",
-        github_url: (profile as any).github_url ?? "", // Fixed cast
-        linkedin_url: (profile as any).linkedin_url ?? "", // Fixed cast
+        github_url: (profile as any).github_url ?? "",
+        linkedin_url: (profile as any).linkedin_url ?? "",
       })};
       const skills   = ${JSON.stringify(skills.slice(0, 18).map(s => s.name))};
       const projects = ${JSON.stringify(projects.slice(0, 6).map(p => ({ title: p.title, desc: p.description ?? "", tech: (p.tech_stack ?? []).join(", ") })))};
@@ -414,8 +413,10 @@ export function HeroSection() {
               View My Work
             </a>
           </Button>
+          
+          {/* FIXED: Explicitly set text-foreground and hover:text-foreground/primary to fix unreadable text on hover */}
           <Button variant="outline" size="lg"
-            className="px-8 py-6 text-lg rounded-xl border-border hover:bg-secondary hover:border-primary/50 transition-all duration-300 hover:scale-105"
+            className="px-8 py-6 text-lg rounded-xl border-border text-foreground hover:bg-secondary hover:text-primary hover:border-primary/50 transition-all duration-300 hover:scale-105"
             asChild>
             <a href="#contact" onClick={(e) => { e.preventDefault(); document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" }); }}>
               Get in Touch

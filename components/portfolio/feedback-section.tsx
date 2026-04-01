@@ -7,6 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollAnimator } from "./scroll-animator";
 import { createClient } from "@/lib/supabase/client";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface Feedback {
   id: string;
@@ -24,6 +32,35 @@ const EMOJI_RATINGS = [
   { emoji: "😍", label: "Love it", value: 4 },
   { emoji: "🤩", label: "Amazing!", value: 5 },
 ];
+
+/** * Handles timezone drift between Supabase (UTC) and Local Time.
+ * If difference is negative or < 60s, it defaults to "Just now".
+ */
+function formatFeedbackTime(dateStr: string) {
+  const date = new Date(dateStr);
+  const now = new Date();
+  
+  // Calculate absolute difference to handle slight clock desyncs
+  const diffInMs = now.getTime() - date.getTime();
+  const diffInSecs = Math.floor(diffInMs / 1000);
+  const diffInMins = Math.floor(diffInSecs / 60);
+  const diffInHours = Math.floor(diffInMins / 60);
+
+  if (diffInSecs < 60) return "Just now";
+  
+  if (diffInHours < 24) {
+    if (diffInHours < 1) return `${diffInMins} ${diffInMins === 1 ? 'minute' : 'minutes'} ago`;
+    return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
+  }
+  
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function StarBurst({ visible }: { visible: boolean }) {
   if (!visible) return null;
@@ -61,10 +98,14 @@ function FeedbackCard({ feedback, index }: { feedback: Feedback; index: number }
     "border-cyan-500/30 bg-cyan-500/5",
   ];
   const colorClass = colors[index % colors.length];
+  const isLong = feedback.message.length > 180;
 
   return (
     <div
-      className={`group p-4 rounded-2xl border ${colorClass} transition-all duration-300 hover:scale-[1.02] hover:shadow-lg relative overflow-hidden`}
+      className={cn(
+        "group p-4 rounded-2xl border transition-all duration-300 hover:scale-[1.02] hover:shadow-lg relative overflow-hidden",
+        colorClass
+      )}
     >
       <div className="absolute top-0 right-0 text-5xl opacity-10 pointer-events-none select-none translate-x-2 -translate-y-2 transition-all duration-300 group-hover:opacity-20 group-hover:scale-110">
         {feedback.emoji}
@@ -89,13 +130,35 @@ function FeedbackCard({ feedback, index }: { feedback: Feedback; index: number }
               ))}
             </div>
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
-            {feedback.message}
-          </p>
+
+          <div className="relative">
+            <p className={cn("text-sm text-muted-foreground leading-relaxed", isLong && "line-clamp-3")}>
+              {feedback.message}
+            </p>
+            {isLong && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button className="text-xs text-primary font-bold mt-1 hover:underline cursor-pointer">
+                    Read full message
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <span className="text-xl">{feedback.emoji}</span>
+                      From {feedback.name || "Anonymous"}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="mt-2 text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-secondary/20 p-4 rounded-xl border">
+                    {feedback.message}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+
           <p className="text-[10px] text-muted-foreground/50 mt-1.5 font-mono">
-            {new Date(feedback.created_at).toLocaleDateString("en-US", {
-              month: "short", day: "numeric", year: "numeric",
-            })}
+            {formatFeedbackTime(feedback.created_at)}
           </p>
         </div>
       </div>
@@ -173,7 +236,7 @@ export function FeedbackSection() {
             Feedback Wall 💬
           </h2>
           <p className="text-muted-foreground max-w-md mx-auto text-sm md:text-base">
-            Loved the portfolio? Have suggestions? Drop your thoughts below — no login needed, you can go anonymous!
+            Loved the portfolio? Drop your thoughts below — no login needed!
           </p>
           {feedbacks.length > 0 && (
             <div className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-medium">
@@ -185,7 +248,6 @@ export function FeedbackSection() {
 
         <div className="grid lg:grid-cols-2 gap-8 items-start">
           <ScrollAnimator animation="fade-left" delay={100}>
-            {/* ── removed FloatingParticles, kept card clean ── */}
             <Card className="bg-card/50 border-border">
               <CardContent className="p-6 md:p-8">
                 <h3 className="text-lg font-semibold mb-5 flex items-center gap-2">
@@ -204,7 +266,6 @@ export function FeedbackSection() {
                       <label className="text-xs font-bold uppercase text-foreground mb-4 block">
                         How would you rate this portfolio? *
                       </label>
-                      {/* ── emoji picker: no bg, bigger emojis ── */}
                       <div className="relative flex items-center justify-center gap-1 sm:gap-2 py-4">
                         <StarBurst visible={showBurst} />
                         {EMOJI_RATINGS.map((item) => (
@@ -214,24 +275,22 @@ export function FeedbackSection() {
                             onClick={() => handleRatingClick(item)}
                             onMouseEnter={() => setHoveredRating(item.value)}
                             onMouseLeave={() => setHoveredRating(0)}
-                            className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200 ${
+                            className={cn(
+                              "flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200",
                               formState.rating === item.value
                                 ? "bg-primary/15 scale-125 shadow-md ring-1 ring-primary/30"
                                 : hoveredRating >= item.value
                                 ? "scale-110 bg-secondary/60"
                                 : "hover:scale-105 hover:bg-secondary/40"
-                            }`}
+                            )}
                           >
                             <span className="text-4xl leading-none select-none">
                               {item.emoji}
                             </span>
-                            <span
-                              className={`text-[11px] font-bold font-mono leading-none ${
-                                formState.rating === item.value
-                                  ? "text-primary"
-                                  : "text-muted-foreground"
-                              }`}
-                            >
+                            <span className={cn(
+                              "text-[11px] font-bold font-mono leading-none",
+                              formState.rating === item.value ? "text-primary" : "text-muted-foreground"
+                            )}>
                               {item.label}
                             </span>
                           </button>
@@ -240,11 +299,8 @@ export function FeedbackSection() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase text-muted-foreground">
-                        Name <span className="normal-case font-normal text-muted-foreground/60">(optional)</span>
-                      </label>
                       <Input
-                        placeholder="Your name or leave blank 👤"
+                        placeholder="Your name (optional) 👤"
                         value={formState.name}
                         onChange={(e) => setFormState({ ...formState, name: e.target.value })}
                         className="bg-secondary/20 border-border h-10"
@@ -252,9 +308,6 @@ export function FeedbackSection() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase text-muted-foreground">
-                        Your Message *
-                      </label>
                       <Textarea
                         placeholder="What did you think? 💭"
                         rows={4}
@@ -291,7 +344,7 @@ export function FeedbackSection() {
                   <p className="text-muted-foreground font-mono text-sm">No feedback yet</p>
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[520px] overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
                   {feedbacks.map((fb, i) => (
                     <FeedbackCard key={fb.id} feedback={fb} index={i} />
                   ))}
@@ -301,6 +354,21 @@ export function FeedbackSection() {
           </ScrollAnimator>
         </div>
       </div>
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: hsl(var(--border));
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: hsl(var(--primary) / 0.3);
+        }
+      `}</style>
     </section>
   );
 }

@@ -41,11 +41,12 @@ export function CursorGlow() {
       style={{ opacity: isVisible ? 1 : 0 }}
     >
       <div
-        className="absolute w-[200px] h-[200px] rounded-full"
+        className="absolute w-[300px] h-[300px] rounded-full"
         style={{
           background:
             "radial-gradient(circle, oklch(0.72 0.15 220 / 0.05) 0%, transparent 75%)",
-          transform: `translate(${position.x - 100}px, ${position.y - 100}px)`,
+          /* Offset is half of the width/height (150px) to keep cursor centered */
+          transform: `translate(${position.x - 150}px, ${position.y - 150}px)`,
           transition: "transform 0.1s ease-out",
         }}
       />

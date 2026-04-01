@@ -7,22 +7,27 @@ import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
 
 const navItems = [
-  { name: "Home", href: "#home" },
-  { name: "About", href: "#about" },
-  { name: "Skills", href: "#skills" },
-  { name: "Projects", href: "#projects" },
-  { name: "Certificates", href: "#certificates" },
-  { name: "Contact", href: "#contact" },
-  { name: "Feedback", href: "#feedback" },
+  { name: "Home", href: "home" }, // Removed # from the string
+  { name: "About", href: "about" },
+  { name: "Skills", href: "skills" },
+  { name: "Projects", href: "projects" },
+  { name: "Certificates", href: "certificates" },
+  { name: "Contact", href: "contact" },
+  { name: "Feedback", href: "feedback" },
 ];
 
-/** Smooth-scroll to a section without adding a trailing # to the URL */
-function scrollToSection(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+/** Smooth-scroll to a section and keep the URL clean (no #) */
+function scrollToSection(e: React.MouseEvent<HTMLAnchorElement>, id: string) {
   e.preventDefault();
-  const id = href.replace("#", "");
   const el = document.getElementById(id);
   if (el) {
     el.scrollIntoView({ behavior: "smooth" });
+    // This updates the URL to be clean (e.g., localhost:3000/about or just /)
+    // If you want it to stay exactly at localhost:3000/ use:
+    window.history.pushState(null, "", "/"); 
+    
+    // If you prefer the clean path look (localhost:3000/about) without the #, use:
+    // window.history.pushState(null, "", `/${id}`);
   }
 }
 
@@ -42,14 +47,6 @@ function ThemeToggleButton() {
       aria-label="Toggle theme"
       style={{ isolation: "isolate" }}
     >
-      <span
-        className={cn(
-          "absolute inset-0 rounded-lg transition-all duration-700 pointer-events-none",
-          isDark
-            ? "bg-slate-900/0 scale-0 opacity-0"
-            : "bg-amber-50/0 scale-0 opacity-0"
-        )}
-      />
       <Sun
         className={cn(
           "h-5 w-5 transition-all duration-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
@@ -83,7 +80,7 @@ export function Navigation() {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
 
-      const sections = navItems.map((item) => item.href.slice(1));
+      const sections = navItems.map((item) => item.href);
       for (const section of sections.reverse()) {
         const element = document.getElementById(section);
         if (element) {
@@ -104,64 +101,33 @@ export function Navigation() {
 
   if (!mounted) return null;
 
-  const initials = profile?.name
-    ? profile.name.split(" ").map((n) => n[0]).join("")
-    : "CE";
+  const initials = profile?.name ? profile.name.split(" ").map((n) => n[0]).join("") : "CE";
   const firstName = profile?.name ? profile.name.split(" ")[0] : "Clarence";
 
   return (
-    <nav
-      className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-500",
-        scrolled
-          ? "glass bg-background/80 border-b border-border shadow-lg"
-          : "bg-transparent"
-      )}
-    >
+    <nav className={cn("fixed top-0 left-0 right-0 z-50 transition-all duration-500", scrolled ? "glass bg-background/80 border-b border-border shadow-lg" : "bg-transparent")}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <a
-            href="#home"
-            onClick={(e) => scrollToSection(e, "#home")}
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-          >
-            <div
-              className={cn(
-                "transition-all duration-300 overflow-hidden",
-                showProfileInNav ? "w-8 h-8 opacity-100" : "w-0 opacity-0"
-              )}
-            >
+          <a href="/" onClick={(e) => scrollToSection(e, "home")} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <div className={cn("transition-all duration-300 overflow-hidden", showProfileInNav ? "w-8 h-8 opacity-100" : "w-0 opacity-0")}>
               {profile?.profile_picture_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={profile.profile_picture_url}
-                  alt={profile.name ?? "Profile"}
-                  className="w-8 h-8 rounded-full object-cover border-2 border-primary/20"
-                />
+                <img src={profile.profile_picture_url} alt={profile.name ?? "Profile"} className="w-8 h-8 rounded-full object-cover border-2 border-primary/20" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-linear-to-br from-primary/20 to-accent/20 flex items-center justify-center text-xs font-bold text-primary border-2 border-primary/20">
-                  {initials}
-                </div>
+                <div className="w-8 h-8 rounded-full bg-linear-to-br from-primary/20 to-accent/20 flex items-center justify-center text-xs font-bold text-primary border-2 border-primary/20">{initials}</div>
               )}
             </div>
-            <span className="text-xl font-bold text-gradient">
-              {showProfileInNav ? firstName : "CE"}
-            </span>
+            <span className="text-xl font-bold text-gradient">{showProfileInNav ? firstName : "CE"}</span>
           </a>
 
-          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
             {navItems.map((item) => (
               <a
                 key={item.name}
-                href={item.href}
+                href={`/${item.href}`}
                 onClick={(e) => scrollToSection(e, item.href)}
                 className={cn(
                   "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300",
-                  activeSection === item.href.slice(1)
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  activeSection === item.href ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 )}
               >
                 {item.name}
@@ -172,14 +138,9 @@ export function Navigation() {
             </div>
           </div>
 
-          {/* Mobile */}
           <div className="flex items-center gap-2 md:hidden">
             <ThemeToggleButton />
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg hover:bg-secondary transition-colors"
-              aria-label="Toggle menu"
-            >
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 rounded-lg hover:bg-secondary transition-colors" aria-label="Toggle menu">
               <div className="w-6 h-5 flex flex-col justify-between">
                 <span className={cn("w-full h-0.5 bg-foreground transition-all duration-300", mobileMenuOpen && "rotate-45 translate-y-2")} />
                 <span className={cn("w-full h-0.5 bg-foreground transition-all duration-300", mobileMenuOpen && "opacity-0")} />
@@ -187,35 +148,6 @@ export function Navigation() {
               </div>
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Mobile Menu */}
-      <div
-        className={cn(
-          "md:hidden glass bg-background/95 border-b border-border overflow-hidden transition-all duration-300",
-          mobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-        )}
-      >
-        <div className="px-4 py-3 space-y-1">
-          {navItems.map((item) => (
-            <a
-              key={item.name}
-              href={item.href}
-              onClick={(e) => {
-                scrollToSection(e, item.href);
-                setMobileMenuOpen(false);
-              }}
-              className={cn(
-                "flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300",
-                activeSection === item.href.slice(1)
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-              )}
-            >
-              {item.name}
-            </a>
-          ))}
         </div>
       </div>
     </nav>
