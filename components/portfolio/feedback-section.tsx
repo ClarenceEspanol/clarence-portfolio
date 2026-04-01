@@ -226,7 +226,7 @@ export function FeedbackSection() {
     : "—";
 
   return (
-    <section id="feedback" className="py-12 md:py-24 px-4 relative overflow-x-hidden">
+    <section id="feedback" className="py-10 md:py-24 px-3 sm:px-4 relative overflow-x-hidden">
       <div className="max-w-6xl mx-auto relative z-10">
         <ScrollAnimator animation="fade-up" className="text-center mb-8 md:mb-12">
           <p className="text-primary font-mono text-xs md:text-sm mb-2">Share Your Thoughts</p>
@@ -247,7 +247,7 @@ export function FeedbackSection() {
         <div className="grid lg:grid-cols-2 gap-8 items-start">
           <ScrollAnimator animation="fade-left" delay={100}>
             <Card className="bg-card/50 border-border overflow-hidden">
-              <CardContent className="p-5 md:p-8">
+              <CardContent className="p-4 sm:p-5 md:p-8">
                 <h3 className="text-base md:text-lg font-semibold mb-5 flex items-center gap-2">
                   <span className="text-xl">✍️</span> Leave Feedback
                 </h3>
@@ -261,11 +261,10 @@ export function FeedbackSection() {
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
                     <div>
-                      <label className="text-[10px] md:text-xs font-bold uppercase text-foreground mb-4 block text-center sm:text-left">
+                      <label className="text-[10px] md:text-xs font-bold uppercase text-foreground mb-3 block">
                         How would you rate this portfolio? *
                       </label>
-                      {/* FIXED: flex-wrap ensures emojis don't push outside mobile screen */}
-                      <div className="relative flex flex-wrap items-center justify-center gap-2 md:gap-3 py-2">
+                        <div className="relative flex items-center justify-between gap-1 py-2 w-full">
                         <StarBurst visible={showBurst} />
                         {EMOJI_RATINGS.map((item) => (
                           <button
@@ -275,7 +274,7 @@ export function FeedbackSection() {
                             onMouseEnter={() => setHoveredRating(item.value)}
                             onMouseLeave={() => setHoveredRating(0)}
                             className={cn(
-                              "flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-200 min-w-[58px] md:min-w-[65px]",
+                              "flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all duration-200 flex-1 min-w-0",
                               formState.rating === item.value
                                 ? "bg-primary/15 scale-110 shadow-sm ring-1 ring-primary/30"
                                 : hoveredRating >= item.value
@@ -283,11 +282,11 @@ export function FeedbackSection() {
                                 : "hover:bg-secondary/40"
                             )}
                           >
-                            <span className="text-2xl md:text-3xl leading-none select-none">
+                            <span className="text-xl sm:text-2xl md:text-3xl leading-none select-none">
                               {item.emoji}
                             </span>
                             <span className={cn(
-                              "text-[9px] font-bold font-mono leading-none",
+                              "text-[8px] sm:text-[9px] font-bold font-mono leading-none",
                               formState.rating === item.value ? "text-primary" : "text-muted-foreground"
                             )}>
                               {item.label}

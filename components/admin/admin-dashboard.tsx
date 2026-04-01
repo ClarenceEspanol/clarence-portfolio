@@ -19,7 +19,7 @@ import {
   Star, Image, Save, MapPin, Linkedin, Briefcase, GraduationCap,
   LogOut, KeyRound, AlertCircle, Upload, X, Eye, EyeOff, Code,
   BookOpen, FileText, Bot, Send, ChevronDown, ChevronRight,
-  MessageCircleHeart, Download, Presentation,
+  MessageCircleHeart, Download, Presentation, ChevronUp, ArrowUpDown,
 } from "lucide-react";
 
 // ─── Toast Notification System ───────────────────────────────────────────────
@@ -973,6 +973,39 @@ function ProjectsManager() {
     toast("Project deleted.", "info");
   };
 
+  const handleMoveProject = async (id: string, direction: "up" | "down") => {
+    const idx = projects.findIndex((p) => p.id === id);
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === projects.length - 1) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    const updated = [...projects];
+    [updated[idx], updated[swapIdx]] = [updated[swapIdx], updated[idx]];
+    const reordered = updated.map((p, i) => ({ ...p, sort_order: i }));
+    setProjects(reordered);
+    await Promise.all(
+      [reordered[idx], reordered[swapIdx]].map((p) =>
+        supabase.from("projects").update({ sort_order: p.sort_order }).eq("id", p.id)
+      )
+    );
+    toast("Order updated!", "success");
+  };
+
+  const handleMoveToPosition = async (id: string, newPos: number) => {
+    const idx = projects.findIndex((p) => p.id === id);
+    if (idx === newPos) return;
+    const updated = [...projects];
+    const [moved] = updated.splice(idx, 1);
+    updated.splice(newPos, 0, moved);
+    const reordered = updated.map((p, i) => ({ ...p, sort_order: i }));
+    setProjects(reordered);
+    await Promise.all(
+      reordered.map((p) =>
+        supabase.from("projects").update({ sort_order: p.sort_order }).eq("id", p.id)
+      )
+    );
+    toast("Order updated!", "success");
+  };
+
   const addTag = (tags: string[], setFn: (t: string[]) => void) => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) { setFn([...tags, tagInput.trim()]); setTagInput(""); }
   };
@@ -1117,12 +1150,33 @@ function ProjectsManager() {
 
       {loading ? <div className="flex justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" /></div> : (
         <div className="grid gap-4">
-          {projects.map((project) => (
+          {projects.map((project, idx) => (
             <Card key={project.id} className="bg-card/50">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3 flex-1">
-                    <GripVertical className="w-5 h-5 text-muted-foreground mt-1" />
+                  {/* Order controls */}
+                  <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground disabled:opacity-20"
+                      onClick={() => handleMoveProject(project.id, "up")}
+                      disabled={idx === 0}
+                      title="Move up"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-xs font-mono font-bold text-muted-foreground leading-none">{idx + 1}</span>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground disabled:opacity-20"
+                      onClick={() => handleMoveProject(project.id, "down")}
+                      disabled={idx === projects.length - 1}
+                      title="Move down"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
                     {project.image_url && <img src={project.image_url} alt={project.title} className="w-16 h-12 object-cover rounded-lg border shrink-0" />}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -1131,7 +1185,30 @@ function ProjectsManager() {
                         {project.featured && <Star className="w-3.5 h-3.5 text-primary fill-primary" />}
                       </div>
                       <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{project.description}</p>
-                      <div className="flex flex-wrap gap-1">{(project.tags || []).map((tag) => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}</div>
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {(project.tags || []).map((tag) => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
+                        {/* Move to position selector */}
+                        {projects.length > 1 && (
+                          <div className="flex items-center gap-1 ml-auto">
+                            <ArrowUpDown className="w-3 h-3 text-muted-foreground" />
+                            <Select
+                              value={String(idx)}
+                              onValueChange={(val) => handleMoveToPosition(project.id, Number(val))}
+                            >
+                              <SelectTrigger className="h-6 text-[11px] w-[90px] px-2 border-dashed">
+                                <SelectValue placeholder="Move to…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {projects.map((_, i) => (
+                                  <SelectItem key={i} value={String(i)} className="text-xs">
+                                    Position {i + 1}{i === idx ? " (current)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
