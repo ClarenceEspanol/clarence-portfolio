@@ -33,14 +33,12 @@ const EMOJI_RATINGS = [
   { emoji: "🤩", label: "Amazing!", value: 5 },
 ];
 
-/** * Handles timezone drift between Supabase (UTC) and Local Time.
- * If difference is negative or < 60s, it defaults to "Just now".
+/** * Handles timezone drift and relative time display.
  */
 function formatFeedbackTime(dateStr: string) {
   const date = new Date(dateStr);
   const now = new Date();
   
-  // Calculate absolute difference to handle slight clock desyncs
   const diffInMs = now.getTime() - date.getTime();
   const diffInSecs = Math.floor(diffInMs / 1000);
   const diffInMins = Math.floor(diffInSecs / 60);
@@ -103,27 +101,27 @@ function FeedbackCard({ feedback, index }: { feedback: Feedback; index: number }
   return (
     <div
       className={cn(
-        "group p-4 rounded-2xl border transition-all duration-300 hover:scale-[1.02] hover:shadow-lg relative overflow-hidden",
+        "group p-4 rounded-2xl border transition-all duration-300 hover:scale-[1.01] hover:shadow-md relative overflow-hidden",
         colorClass
       )}
     >
-      <div className="absolute top-0 right-0 text-5xl opacity-10 pointer-events-none select-none translate-x-2 -translate-y-2 transition-all duration-300 group-hover:opacity-20 group-hover:scale-110">
+      <div className="absolute top-0 right-0 text-4xl opacity-10 pointer-events-none select-none translate-x-2 -translate-y-2 transition-all duration-300 group-hover:opacity-20">
         {feedback.emoji}
       </div>
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-lg shrink-0 border border-border">
+        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-base shrink-0 border border-border">
           {feedback.emoji}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="font-semibold text-sm text-foreground">
+            <span className="font-semibold text-sm text-foreground truncate">
               {feedback.name || "Anonymous"}
             </span>
-            <div className="flex gap-0.5">
+            <div className="flex gap-0.5 shrink-0">
               {Array.from({ length: 5 }).map((_, i) => (
                 <span
                   key={i}
-                  className={`text-xs ${i < feedback.rating ? "text-amber-400" : "text-muted-foreground/30"}`}
+                  className={`text-[10px] ${i < feedback.rating ? "text-amber-400" : "text-muted-foreground/30"}`}
                 >
                   ★
                 </span>
@@ -132,24 +130,24 @@ function FeedbackCard({ feedback, index }: { feedback: Feedback; index: number }
           </div>
 
           <div className="relative">
-            <p className={cn("text-sm text-muted-foreground leading-relaxed", isLong && "line-clamp-3")}>
+            <p className={cn("text-xs md:text-sm text-muted-foreground leading-relaxed", isLong && "line-clamp-3")}>
               {feedback.message}
             </p>
             {isLong && (
               <Dialog>
                 <DialogTrigger asChild>
-                  <button className="text-xs text-primary font-bold mt-1 hover:underline cursor-pointer">
-                    Read full message
+                  <button className="text-[10px] md:text-xs text-primary font-bold mt-1 hover:underline cursor-pointer">
+                    Read more
                   </button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <span className="text-xl">{feedback.emoji}</span>
                       From {feedback.name || "Anonymous"}
                     </DialogTitle>
                   </DialogHeader>
-                  <div className="mt-2 text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-secondary/20 p-4 rounded-xl border">
+                  <div className="mt-2 text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-secondary/20 p-4 rounded-xl border max-h-[60vh] overflow-y-auto">
                     {feedback.message}
                   </div>
                 </DialogContent>
@@ -157,7 +155,7 @@ function FeedbackCard({ feedback, index }: { feedback: Feedback; index: number }
             )}
           </div>
 
-          <p className="text-[10px] text-muted-foreground/50 mt-1.5 font-mono">
+          <p className="text-[9px] text-muted-foreground/50 mt-1.5 font-mono">
             {formatFeedbackTime(feedback.created_at)}
           </p>
         </div>
@@ -228,45 +226,46 @@ export function FeedbackSection() {
     : "—";
 
   return (
-    <section id="feedback" className="py-16 md:py-24 px-4 relative overflow-hidden">
+    <section id="feedback" className="py-12 md:py-24 px-4 relative overflow-x-hidden">
       <div className="max-w-6xl mx-auto relative z-10">
-        <ScrollAnimator animation="fade-up" className="text-center mb-12">
-          <p className="text-primary font-mono text-sm mb-2">Share Your Thoughts</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-3">
+        <ScrollAnimator animation="fade-up" className="text-center mb-8 md:mb-12">
+          <p className="text-primary font-mono text-xs md:text-sm mb-2">Share Your Thoughts</p>
+          <h2 className="text-2xl md:text-5xl font-bold tracking-tight mb-3">
             Feedback Wall 💬
           </h2>
-          <p className="text-muted-foreground max-w-md mx-auto text-sm md:text-base">
+          <p className="text-muted-foreground max-w-md mx-auto text-xs md:text-base px-2">
             Loved the portfolio? Drop your thoughts below — no login needed!
           </p>
           {feedbacks.length > 0 && (
-            <div className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-medium">
+            <div className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-medium">
               <span className="text-base">⭐</span>
-              <span>{avgRating} average · {feedbacks.length} {feedbacks.length === 1 ? "review" : "reviews"}</span>
+              <span>{avgRating} average · {feedbacks.length} reviews</span>
             </div>
           )}
         </ScrollAnimator>
 
         <div className="grid lg:grid-cols-2 gap-8 items-start">
           <ScrollAnimator animation="fade-left" delay={100}>
-            <Card className="bg-card/50 border-border">
-              <CardContent className="p-6 md:p-8">
-                <h3 className="text-lg font-semibold mb-5 flex items-center gap-2">
+            <Card className="bg-card/50 border-border overflow-hidden">
+              <CardContent className="p-5 md:p-8">
+                <h3 className="text-base md:text-lg font-semibold mb-5 flex items-center gap-2">
                   <span className="text-xl">✍️</span> Leave Feedback
                 </h3>
 
                 {submitted ? (
-                  <div className="flex flex-col items-center py-10 text-center">
-                    <div className="text-6xl mb-4 animate-bounce">🎉</div>
-                    <h4 className="text-xl font-bold mb-2">Thank you!</h4>
-                    <p className="text-muted-foreground text-sm">Your feedback means the world to me!</p>
+                  <div className="flex flex-col items-center py-10 text-center animate-in fade-in zoom-in duration-300">
+                    <div className="text-5xl mb-4 animate-bounce">🎉</div>
+                    <h4 className="text-lg font-bold mb-2">Thank you!</h4>
+                    <p className="text-muted-foreground text-xs">Your feedback means the world to me!</p>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmit} className="space-y-5">
+                  <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
                     <div>
-                      <label className="text-xs font-bold uppercase text-foreground mb-4 block">
+                      <label className="text-[10px] md:text-xs font-bold uppercase text-foreground mb-4 block text-center sm:text-left">
                         How would you rate this portfolio? *
                       </label>
-                      <div className="relative flex items-center justify-center gap-1 sm:gap-2 py-4">
+                      {/* FIXED: flex-wrap ensures emojis don't push outside mobile screen */}
+                      <div className="relative flex flex-wrap items-center justify-center gap-2 md:gap-3 py-2">
                         <StarBurst visible={showBurst} />
                         {EMOJI_RATINGS.map((item) => (
                           <button
@@ -276,19 +275,19 @@ export function FeedbackSection() {
                             onMouseEnter={() => setHoveredRating(item.value)}
                             onMouseLeave={() => setHoveredRating(0)}
                             className={cn(
-                              "flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200",
+                              "flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-200 min-w-[58px] md:min-w-[65px]",
                               formState.rating === item.value
-                                ? "bg-primary/15 scale-125 shadow-md ring-1 ring-primary/30"
+                                ? "bg-primary/15 scale-110 shadow-sm ring-1 ring-primary/30"
                                 : hoveredRating >= item.value
-                                ? "scale-110 bg-secondary/60"
-                                : "hover:scale-105 hover:bg-secondary/40"
+                                ? "scale-105 bg-secondary/60"
+                                : "hover:bg-secondary/40"
                             )}
                           >
-                            <span className="text-4xl leading-none select-none">
+                            <span className="text-2xl md:text-3xl leading-none select-none">
                               {item.emoji}
                             </span>
                             <span className={cn(
-                              "text-[11px] font-bold font-mono leading-none",
+                              "text-[9px] font-bold font-mono leading-none",
                               formState.rating === item.value ? "text-primary" : "text-muted-foreground"
                             )}>
                               {item.label}
@@ -303,27 +302,27 @@ export function FeedbackSection() {
                         placeholder="Your name (optional) 👤"
                         value={formState.name}
                         onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-                        className="bg-secondary/20 border-border h-10"
+                        className="bg-secondary/20 border-border h-9 text-sm"
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <Textarea
                         placeholder="What did you think? 💭"
-                        rows={4}
+                        rows={3}
                         value={formState.message}
                         onChange={(e) => setFormState({ ...formState, message: e.target.value })}
                         required
-                        className="bg-secondary/20 border-border resize-none"
+                        className="bg-secondary/20 border-border resize-none text-sm"
                       />
                     </div>
 
                     <Button
                       type="submit"
-                      className="w-full h-11 font-bold rounded-xl"
+                      className="w-full h-10 font-bold rounded-xl text-sm"
                       disabled={isSubmitting || !formState.rating}
                     >
-                      🚀 Submit Feedback
+                      🚀 {isSubmitting ? "Sending..." : "Submit Feedback"}
                     </Button>
                   </form>
                 )}
@@ -333,18 +332,18 @@ export function FeedbackSection() {
 
           <ScrollAnimator animation="fade-right" delay={200}>
             <div className="space-y-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold flex items-center gap-2 text-lg">
+              <div className="flex items-center justify-between mb-4 px-1">
+                <h3 className="font-semibold flex items-center gap-2 text-base md:text-lg">
                   <span className="text-xl">🏆</span> What People Say
                 </h3>
               </div>
 
               {feedbacks.length === 0 ? (
                 <div className="flex flex-col items-center py-16 text-center border border-dashed border-border rounded-2xl">
-                  <p className="text-muted-foreground font-mono text-sm">No feedback yet</p>
+                  <p className="text-muted-foreground font-mono text-xs">No feedback yet</p>
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[520px] overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar">
+                <div className="space-y-3 max-h-[420px] md:max-h-[520px] overflow-y-auto overflow-x-hidden px-1 custom-scrollbar">
                   {feedbacks.map((fb, i) => (
                     <FeedbackCard key={fb.id} feedback={fb} index={i} />
                   ))}
@@ -356,7 +355,7 @@ export function FeedbackSection() {
       </div>
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
-          width: 5px;
+          width: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
