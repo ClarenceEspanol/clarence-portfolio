@@ -33,19 +33,24 @@ const EMOJI_RATINGS = [
   { emoji: "🤩", label: "Amazing!", value: 5 },
 ];
 
+/** * Handles timezone drift and relative time display.
+ */
 function formatFeedbackTime(dateStr: string) {
   const date = new Date(dateStr);
   const now = new Date();
+  
   const diffInMs = now.getTime() - date.getTime();
   const diffInSecs = Math.floor(diffInMs / 1000);
   const diffInMins = Math.floor(diffInSecs / 60);
   const diffInHours = Math.floor(diffInMins / 60);
 
   if (diffInSecs < 60) return "Just now";
+  
   if (diffInHours < 24) {
     if (diffInHours < 1) return `${diffInMins} ${diffInMins === 1 ? 'minute' : 'minutes'} ago`;
     return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
   }
+  
   return date.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
@@ -94,7 +99,12 @@ function FeedbackCard({ feedback, index }: { feedback: Feedback; index: number }
   const isLong = feedback.message.length > 180;
 
   return (
-    <div className={cn("group p-4 rounded-2xl border transition-all duration-300 hover:scale-[1.01] relative overflow-hidden", colorClass)}>
+    <div
+      className={cn(
+        "group p-4 rounded-2xl border transition-all duration-300 hover:scale-[1.01] hover:shadow-md relative overflow-hidden",
+        colorClass
+      )}
+    >
       <div className="absolute top-0 right-0 text-4xl opacity-10 pointer-events-none select-none translate-x-2 -translate-y-2 transition-all duration-300 group-hover:opacity-20">
         {feedback.emoji}
       </div>
@@ -109,10 +119,16 @@ function FeedbackCard({ feedback, index }: { feedback: Feedback; index: number }
             </span>
             <div className="flex gap-0.5 shrink-0">
               {Array.from({ length: 5 }).map((_, i) => (
-                <span key={i} className={`text-[10px] ${i < feedback.rating ? "text-amber-400" : "text-muted-foreground/30"}`}>★</span>
+                <span
+                  key={i}
+                  className={`text-[10px] ${i < feedback.rating ? "text-amber-400" : "text-muted-foreground/30"}`}
+                >
+                  ★
+                </span>
               ))}
             </div>
           </div>
+
           <div className="relative">
             <p className={cn("text-xs md:text-sm text-muted-foreground leading-relaxed", isLong && "line-clamp-3")}>
               {feedback.message}
@@ -131,13 +147,14 @@ function FeedbackCard({ feedback, index }: { feedback: Feedback; index: number }
                       From {feedback.name || "Anonymous"}
                     </DialogTitle>
                   </DialogHeader>
-                  <div className="mt-2 text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-secondary/20 p-4 rounded-xl border max-h-[60vh] overflow-y-auto custom-scrollbar">
+                  <div className="mt-2 text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-secondary/20 p-4 rounded-xl border max-h-[60vh] overflow-y-auto">
                     {feedback.message}
                   </div>
                 </DialogContent>
               </Dialog>
             )}
           </div>
+
           <p className="text-[9px] text-muted-foreground/50 mt-1.5 font-mono">
             {formatFeedbackTime(feedback.created_at)}
           </p>
@@ -169,7 +186,11 @@ export function FeedbackSection() {
   }, []);
 
   async function loadFeedbacks() {
-    const { data } = await supabase.from("feedbacks").select("*").order("created_at", { ascending: false }).limit(20);
+    const { data } = await supabase
+      .from("feedbacks")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
     if (data) setFeedbacks(data);
   }
 
@@ -205,11 +226,11 @@ export function FeedbackSection() {
     : "—";
 
   return (
-    <section id="feedback" className="py-12 md:py-24 pt-24 md:pt-32 px-4 relative overflow-x-hidden">
+    <section id="feedback" className="py-12 md:py-24 px-4 relative overflow-x-hidden">
       <div className="max-w-6xl mx-auto relative z-10">
         <ScrollAnimator animation="fade-up" className="text-center mb-8 md:mb-12">
           <p className="text-primary font-mono text-xs md:text-sm mb-2">Share Your Thoughts</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-3">
+          <h2 className="text-2xl md:text-5xl font-bold tracking-tight mb-3">
             Feedback Wall 💬
           </h2>
           <p className="text-muted-foreground max-w-md mx-auto text-xs md:text-base px-2">
@@ -235,7 +256,7 @@ export function FeedbackSection() {
                   <div className="flex flex-col items-center py-10 text-center animate-in fade-in zoom-in duration-300">
                     <div className="text-5xl mb-4 animate-bounce">🎉</div>
                     <h4 className="text-lg font-bold mb-2">Thank you!</h4>
-                    <p className="text-muted-foreground text-xs">Your feedback means the world!</p>
+                    <p className="text-muted-foreground text-xs">Your feedback means the world to me!</p>
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
@@ -243,9 +264,8 @@ export function FeedbackSection() {
                       <label className="text-[10px] md:text-xs font-bold uppercase text-foreground mb-4 block text-center sm:text-left">
                         How would you rate this portfolio? *
                       </label>
-                      
-                      {/* Grid layout for emojis to prevent overlapping/overflow on mobile */}
-                      <div className="relative grid grid-cols-5 gap-1 sm:gap-3 py-2">
+                      {/* FIXED: flex-wrap ensures emojis don't push outside mobile screen */}
+                      <div className="relative flex flex-wrap items-center justify-center gap-2 md:gap-3 py-2">
                         <StarBurst visible={showBurst} />
                         {EMOJI_RATINGS.map((item) => (
                           <button
@@ -255,19 +275,19 @@ export function FeedbackSection() {
                             onMouseEnter={() => setHoveredRating(item.value)}
                             onMouseLeave={() => setHoveredRating(0)}
                             className={cn(
-                              "flex flex-col items-center gap-1.5 p-1 sm:p-2 rounded-xl transition-all duration-200",
+                              "flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-200 min-w-[58px] md:min-w-[65px]",
                               formState.rating === item.value
-                                ? "bg-primary/15 scale-105 shadow-sm ring-1 ring-primary/30"
+                                ? "bg-primary/15 scale-110 shadow-sm ring-1 ring-primary/30"
                                 : hoveredRating >= item.value
                                 ? "scale-105 bg-secondary/60"
                                 : "hover:bg-secondary/40"
                             )}
                           >
-                            <span className="text-xl sm:text-3xl leading-none select-none">
+                            <span className="text-2xl md:text-3xl leading-none select-none">
                               {item.emoji}
                             </span>
                             <span className={cn(
-                              "text-[8px] sm:text-[10px] font-bold font-mono leading-none",
+                              "text-[9px] font-bold font-mono leading-none",
                               formState.rating === item.value ? "text-primary" : "text-muted-foreground"
                             )}>
                               {item.label}
@@ -312,9 +332,11 @@ export function FeedbackSection() {
 
           <ScrollAnimator animation="fade-right" delay={200}>
             <div className="space-y-3">
-              <h3 className="font-semibold flex items-center gap-2 text-base md:text-lg px-1">
-                <span>🏆</span> What People Say
-              </h3>
+              <div className="flex items-center justify-between mb-4 px-1">
+                <h3 className="font-semibold flex items-center gap-2 text-base md:text-lg">
+                  <span className="text-xl">🏆</span> What People Say
+                </h3>
+              </div>
 
               {feedbacks.length === 0 ? (
                 <div className="flex flex-col items-center py-16 text-center border border-dashed border-border rounded-2xl">
