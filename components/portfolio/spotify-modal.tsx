@@ -49,11 +49,11 @@ function timeAgo(iso: string) {
 
 function EqBars({ playing }: { playing: boolean }) {
   return (
-    <div className="flex items-end gap-[2px] h-4 shrink-0">
+    <div className="flex items-end gap-0.5 h-4 shrink-0">
       {[1, 2, 3, 4].map((i) => (
         <div
           key={i}
-          className="w-[3px] rounded-full bg-[#1DB954]"
+          className="w-0.75 rounded-full bg-[#1DB954]"
           style={{
             height: playing ? undefined : "4px",
             animation: playing ? `eq-bar ${0.6 + i * 0.15}s ease-in-out infinite alternate` : "none",
@@ -168,7 +168,7 @@ function TrackRow({ track, index, showIndex = false, meta }: {
 
 function NowPlayingCard({ track }: { track: NowPlaying }) {
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-[#1DB954]/10 via-white/[0.03] to-transparent p-5">
+    <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-linear-to-br from-[#1DB954]/10 via-white/3 to-transparent p-5">
       {/* Blurred bg art */}
       {track.albumArt && (
         <div className="absolute inset-0 opacity-10 blur-2xl scale-110 pointer-events-none">
@@ -222,7 +222,7 @@ function NowPlayingCard({ track }: { track: NowPlaying }) {
 
 function OfflineCard() {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 flex items-center gap-4">
+    <div className="rounded-2xl border border-white/10 bg-white/3 p-5 flex items-center gap-4">
       <div className="w-14 h-14 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
         <Music2 className="w-6 h-6 text-white/20" />
       </div>
@@ -303,7 +303,7 @@ export function SpotifyModal({ isOpen, onClose }: SpotifyModalProps) {
 
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogOverlay className="backdrop-blur-sm bg-black/60" />
-        <DialogContent className="!max-w-[95vw] w-[95vw] sm:!max-w-lg max-h-[88vh] overflow-hidden flex flex-col p-0 border-0 bg-transparent shadow-none [&>button]:hidden">
+        <DialogContent className="max-w-[95vw]! w-[95vw] sm:max-w-lg! max-h-[88vh] overflow-hidden flex flex-col p-0 border-0 bg-transparent shadow-none [&>button]:hidden">
           <VisuallyHidden>
             <DialogTitle>Clarence&apos;s Spotify Activity</DialogTitle>
           </VisuallyHidden>
