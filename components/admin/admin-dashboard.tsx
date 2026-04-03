@@ -16,7 +16,7 @@ import {
   LayoutDashboard, FolderKanban, Award, Sparkles, User, Home,
   MessageSquare, Mail, Clock, CheckCircle2, Trash2, RefreshCw,
   TrendingUp, Plus, Pencil, GripVertical, ExternalLink, Github,
-  Star, Image, Save, MapPin, Linkedin, Briefcase, GraduationCap,
+  Star, Image, Images, Save, MapPin, Linkedin, Briefcase, GraduationCap,
   LogOut, KeyRound, AlertCircle, Upload, X, Eye, EyeOff, Code,
   BookOpen, FileText, Bot, Send, ChevronDown, ChevronRight,
   MessageCircleHeart, Download, Presentation, ChevronUp, ArrowUpDown,
@@ -67,7 +67,7 @@ function ToastContainer() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed bottom-4 right-4 z-9999 flex flex-col gap-2 pointer-events-none">
       {toasts.map((t) => (
         <div
           key={t.id}
@@ -121,6 +121,10 @@ interface Certificate {
 interface WorkExperience {
   id: string; title: string; role: string | null;
   period: string | null; description: string | null; sort_order: number;
+}
+
+interface GalleryImage {
+  id: string; url: string; caption: string | null; sort_order: number;
 }
 
 interface ChatbotMessage {
@@ -330,7 +334,7 @@ export function AdminDashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-8 w-full max-w-5xl">
+          <TabsList className="grid grid-cols-9 w-full max-w-5xl">
             <TabsTrigger value="overview"><LayoutDashboard className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Overview</span></TabsTrigger>
             <TabsTrigger value="messages" className="relative">
               <MessageSquare className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Messages</span>
@@ -349,6 +353,9 @@ export function AdminDashboard() {
             <TabsTrigger value="profile"><User className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Profile</span></TabsTrigger>
             <TabsTrigger value="feedback" className="relative">
               <MessageCircleHeart className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Feedback</span>
+            </TabsTrigger>
+            <TabsTrigger value="gallery">
+              <Images className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Gallery</span>
             </TabsTrigger>
           </TabsList>
 
@@ -401,6 +408,7 @@ export function AdminDashboard() {
                     { label: "Manage Projects", icon: <FolderKanban className="w-4 h-4 mr-2" />, tab: "projects" },
                     { label: "Add Certificate", icon: <Award className="w-4 h-4 mr-2" />, tab: "certificates" },
                     { label: "Update Profile", icon: <User className="w-4 h-4 mr-2" />, tab: "profile" },
+                    { label: "Manage Gallery", icon: <Images className="w-4 h-4 mr-2" />, tab: "gallery" },
                     { label: "View Feedback", icon: <MessageCircleHeart className="w-4 h-4 mr-2" />, tab: "feedback" },
                   ].map((action) => (
                     <Button key={action.tab} variant="ghost" className="w-full justify-start" onClick={() => setActiveTab(action.tab)}>
@@ -482,9 +490,201 @@ export function AdminDashboard() {
           <TabsContent value="skills"><SkillsManager /></TabsContent>
           <TabsContent value="profile"><ProfileManager /></TabsContent>
           <TabsContent value="feedback"><FeedbackManager /></TabsContent>
+          <TabsContent value="gallery"><GalleryManager /></TabsContent>
         </Tabs>
       </main>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AI SETTINGS PANEL
+// Reads/writes to `ai_settings` table: { key, value }
+// Required rows:
+//   ai_chatbot_enabled  → "true" / "false"
+//   ai_chatbot_limit    → number string, e.g. "100" (empty = no limit)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function AISettingsPanel() {
+  const supabase = createClient();
+  const [enabled, setEnabled] = useState(true);
+  const [limitInput, setLimitInput] = useState("");
+  const [totalResponses, setTotalResponses] = useState(0);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [autoDeactivated, setAutoDeactivated] = useState(false);
+
+  const loadSettings = async () => {
+    setLoadingSettings(true);
+    try {
+      const [{ data: settings }, { count }] = await Promise.all([
+        supabase.from("ai_settings").select("key, value"),
+        supabase
+          .from("chatbot_conversations")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "assistant"),
+      ]);
+      const map: Record<string, string> = {};
+      (settings || []).forEach((s: { key: string; value: string }) => { map[s.key] = s.value; });
+      setEnabled(map["ai_chatbot_enabled"] !== "false");
+      setLimitInput(map["ai_chatbot_limit"] ?? "");
+      const total = count ?? 0;
+      setTotalResponses(total);
+
+      // Auto-deactivate if limit is reached
+      const limit = map["ai_chatbot_limit"] ? parseInt(map["ai_chatbot_limit"], 10) : null;
+      if (limit && total >= limit && map["ai_chatbot_enabled"] !== "false") {
+        await upsertSetting("ai_chatbot_enabled", "false");
+        setEnabled(false);
+        setAutoDeactivated(true);
+      }
+    } catch (e) { console.error(e); }
+    finally { setLoadingSettings(false); }
+  };
+
+  useEffect(() => { loadSettings(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const upsertSetting = async (key: string, value: string) => {
+    await supabase.from("ai_settings").upsert({ key, value }, { onConflict: "key" });
+  };
+
+  const saveSettings = async () => {
+    setSaving(true);
+    try {
+      await upsertSetting("ai_chatbot_enabled", enabled ? "true" : "false");
+      await upsertSetting("ai_chatbot_limit", limitInput.trim());
+      toast("AI settings saved.", "success");
+      setAutoDeactivated(false);
+      await loadSettings();
+    } catch { toast("Failed to save settings.", "error"); }
+    finally { setSaving(false); }
+  };
+
+  const resetCount = async () => {
+    // Deletes all assistant messages to reset the counter
+    if (!window.confirm("This will delete all AI assistant messages from the database to reset the response counter. Are you sure?")) return;
+    await supabase.from("chatbot_conversations").delete().eq("role", "assistant");
+    toast("AI response count reset.", "info");
+    await loadSettings();
+  };
+
+  const limit = limitInput ? parseInt(limitInput, 10) : null;
+  const usagePercent = limit ? Math.min(100, Math.round((totalResponses / limit) * 100)) : 0;
+  const isLimitReached = limit !== null && totalResponses >= limit;
+
+  if (loadingSettings) return (
+    <div className="flex items-center gap-2 text-muted-foreground text-sm py-2">
+      <RefreshCw className="w-4 h-4 animate-spin" /> Loading AI settings…
+    </div>
+  );
+
+  return (
+    <Card className={`mb-6 border-2 ${!enabled ? "border-amber-500/40 bg-amber-500/5" : isLimitReached ? "border-red-500/40 bg-red-500/5" : "border-primary/20 bg-primary/5"}`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${!enabled ? "bg-amber-500/20" : "bg-primary/10"}`}>
+              <Bot className={`w-4 h-4 ${!enabled ? "text-amber-500" : "text-primary"}`} />
+            </div>
+            <div>
+              <CardTitle className="text-base">AI Chatbot Settings</CardTitle>
+              <CardDescription className="text-xs mt-0">Control AI availability and response limits</CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${
+              !enabled
+                ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                : isLimitReached
+                ? "bg-red-500/10 text-red-500 border-red-500/30"
+                : "bg-green-500/10 text-green-600 border-green-500/30"
+            }`}>
+              {!enabled ? "⚠ Disabled" : isLimitReached ? "⛔ Limit Reached" : "✓ Active"}
+            </span>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {/* Auto-deactivation notice */}
+        {autoDeactivated && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">AI auto-deactivated</p>
+              <p className="text-xs mt-0.5 opacity-80">The AI reached its response limit and was automatically disabled to prevent errors. Reset the counter or raise the limit to re-enable.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Enable / Disable toggle */}
+        <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-background/50 border border-border">
+          <div>
+            <p className="text-sm font-medium">AI Chatbot Active</p>
+            <p className="text-xs text-muted-foreground">When disabled, a warning is shown to visitors</p>
+          </div>
+          <Switch
+            checked={enabled}
+            onCheckedChange={(val) => { setEnabled(val); setAutoDeactivated(false); }}
+          />
+        </div>
+
+        {/* Response limit */}
+        <div className="p-3 rounded-xl bg-background/50 border border-border space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Response Limit</p>
+              <p className="text-xs text-muted-foreground">Max total AI responses. Leave blank for unlimited. AI auto-disables when reached.</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              min="1"
+              value={limitInput}
+              onChange={(e) => setLimitInput(e.target.value)}
+              placeholder="e.g. 500 (blank = unlimited)"
+              className="flex-1 text-sm"
+            />
+          </div>
+          {/* Usage bar */}
+          {limit !== null && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{totalResponses} / {limit} responses used</span>
+                <span className={`font-semibold ${usagePercent >= 90 ? "text-red-500" : usagePercent >= 70 ? "text-amber-500" : "text-green-600"}`}>
+                  {usagePercent}%
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${usagePercent >= 90 ? "bg-red-500" : usagePercent >= 70 ? "bg-amber-500" : "bg-green-500"}`}
+                  style={{ width: `${usagePercent}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {limit === null && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              {totalResponses} responses used · No limit set
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 flex-wrap">
+          <Button size="sm" onClick={saveSettings} disabled={saving} className="shrink-0">
+            <Save className="w-3.5 h-3.5 mr-1.5" />
+            {saving ? "Saving…" : "Save Settings"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={resetCount} className="text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0">
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Reset Counter
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -613,6 +813,9 @@ function ChatbotManager() {
 
   return (
     <div className="space-y-6">
+      {/* ── AI Settings Panel ── */}
+      <AISettingsPanel />
+
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -767,17 +970,17 @@ function ChatbotManager() {
                                 <img
                                   src={msg.file_url!}
                                   alt="Image"
-                                  className="max-w-[200px] max-h-[200px] object-cover rounded-2xl cursor-pointer"
+                                  className="max-w-50 max-h-50 object-cover rounded-2xl cursor-pointer"
                                   onClick={() => window.open(msg.file_url!, "_blank")}
                                 />
                               )}
                               {msg.file_type === "video" && (
-                                <video src={msg.file_url!} controls className="max-w-[200px] rounded-2xl" />
+                                <video src={msg.file_url!} controls className="max-w-50 rounded-2xl" />
                               )}
                               {msg.file_type === "audio" && (
                                 <div className={`px-3 py-2 rounded-2xl flex items-center gap-2 ${isUser ? "bg-secondary" : "bg-primary/10"}`}>
                                   <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
-                                  <audio src={msg.file_url!} controls className="h-8 max-w-[160px]" />
+                                  <audio src={msg.file_url!} controls className="h-8 max-w-40" />
                                 </div>
                               )}
                               {msg.file_type === "file" && (
@@ -788,7 +991,7 @@ function ChatbotManager() {
                                   className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl text-sm ${isUser ? "bg-secondary text-foreground" : "bg-primary/10 text-foreground"}`}
                                 >
                                   <FileText className="w-4 h-4 shrink-0" />
-                                  <span className="truncate max-w-[150px]">{msg.file_name ?? "File"}</span>
+                                  <span className="truncate max-w-37.5">{msg.file_name ?? "File"}</span>
                                 </a>
                               )}
                             </div>
@@ -973,6 +1176,13 @@ function ProjectsManager() {
     toast("Project deleted.", "info");
   };
 
+  const toggleFeatured = async (project: Project) => {
+    const updated = { ...project, featured: !project.featured };
+    await supabase.from("projects").update({ featured: updated.featured }).eq("id", project.id);
+    setProjects(projects.map((p) => (p.id === project.id ? updated : p)));
+    toast(updated.featured ? "Marked as featured!" : "Removed from featured.", "success");
+  };
+
   const handleMoveProject = async (id: string, direction: "up" | "down") => {
     const idx = projects.findIndex((p) => p.id === id);
     if (direction === "up" && idx === 0) return;
@@ -1134,7 +1344,7 @@ function ProjectsManager() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div><h2 className="text-2xl font-bold">Projects</h2><p className="text-muted-foreground">Manage your portfolio projects</p></div>
+        <div><h2 className="text-2xl font-bold">Projects</h2><p className="text-muted-foreground">{projects.length} projects ({projects.filter((p) => p.featured).length} featured — shown on homepage)</p></div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-2" />Add Project</Button></DialogTrigger>
           <DialogContent className="max-w-2xl">
@@ -1195,7 +1405,7 @@ function ProjectsManager() {
                               value={String(idx)}
                               onValueChange={(val) => handleMoveToPosition(project.id, Number(val))}
                             >
-                              <SelectTrigger className="h-6 text-[11px] w-[90px] px-2 border-dashed">
+                              <SelectTrigger className="h-6 text-[11px] w-22.5 px-2 border-dashed">
                                 <SelectValue placeholder="Move to…" />
                               </SelectTrigger>
                               <SelectContent>
@@ -1212,6 +1422,15 @@ function ProjectsManager() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title={project.featured ? "Remove from featured" : "Mark as featured"}
+                      onClick={() => toggleFeatured(project)}
+                      className={project.featured ? "text-primary" : "text-muted-foreground hover:text-primary"}
+                    >
+                      <Star className={`w-4 h-4 ${project.featured ? "fill-primary" : ""}`} />
+                    </Button>
                     {project.live_url && <Button variant="ghost" size="icon" asChild><a href={project.live_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a></Button>}
                     {project.github_url && <Button variant="ghost" size="icon" asChild><a href={project.github_url} target="_blank" rel="noopener noreferrer"><Github className="w-4 h-4" /></a></Button>}
                     <Dialog>
@@ -2197,6 +2416,241 @@ function FeedbackManager() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GALLERY MANAGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function GalleryManager() {
+  const supabase = createClient();
+  const [images, setImages] = useState<GalleryImage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingCaption, setEditingCaption] = useState<{ id: string; value: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { loadImages(); }, []); // eslint-disable-line
+
+  async function loadImages() {
+    setLoading(true);
+    const { data } = await supabase
+      .from("gallery_images")
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (data) setImages(data);
+    setLoading(false);
+  }
+
+  async function handleUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) continue;
+      const ext = file.name.split(".").pop();
+      const path = `gallery/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true });
+      if (error) { console.error(error); continue; }
+      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      const maxOrder = images.length > 0 ? Math.max(...images.map((i) => i.sort_order)) : 0;
+      await supabase.from("gallery_images").insert({ url: urlData.publicUrl, caption: null, sort_order: maxOrder + 1 });
+    }
+    toast("Gallery images uploaded!", "success");
+    await loadImages();
+    setUploading(false);
+  }
+
+  async function deleteImage(img: GalleryImage) {
+    setDeletingId(img.id);
+    const urlParts = img.url.split(`/${BUCKET}/`);
+    if (urlParts.length > 1) await supabase.storage.from(BUCKET).remove([urlParts[1]]);
+    await supabase.from("gallery_images").delete().eq("id", img.id);
+    setImages((prev) => prev.filter((i) => i.id !== img.id));
+    toast("Image deleted.", "info");
+    setDeletingId(null);
+  }
+
+  async function saveCaption(id: string, caption: string) {
+    await supabase.from("gallery_images").update({ caption: caption || null }).eq("id", id);
+    setImages((prev) => prev.map((i) => i.id === id ? { ...i, caption: caption || null } : i));
+    setEditingCaption(null);
+    toast("Caption saved.", "success");
+  }
+
+  async function moveImage(index: number, direction: "up" | "down") {
+    const newImages = [...images];
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= newImages.length) return;
+    [newImages[index], newImages[swapIndex]] = [newImages[swapIndex], newImages[index]];
+    setImages(newImages.map((img, i) => ({ ...img, sort_order: i + 1 })));
+    for (let i = 0; i < newImages.length; i++) {
+      await supabase.from("gallery_images").update({ sort_order: i + 1 }).eq("id", newImages[i].id);
+    }
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Images className="w-6 h-6 text-cyan-500" />
+            Gallery
+          </h2>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {images.length} image{images.length !== 1 ? "s" : ""} · auto-sliding strip in About section (grayscale → color on hover)
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={loadImages}>
+            <RefreshCw className="w-4 h-4 mr-2" />Refresh
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="bg-cyan-500 hover:bg-cyan-600 text-white"
+          >
+            {uploading
+              ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Uploading…</>
+              : <><Plus className="w-4 h-4 mr-2" />Add Images</>
+            }
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handleUpload(e.target.files)}
+          />
+        </div>
+      </div>
+
+      {/* Empty state drop zone */}
+      {images.length === 0 ? (
+        <Card
+          className="border-dashed border-2 border-cyan-500/30 bg-cyan-500/5 cursor-pointer hover:border-cyan-500/60 transition-colors"
+          onClick={() => fileRef.current?.click()}
+        >
+          <CardContent className="text-center py-16">
+            <Upload className="w-10 h-10 mx-auto mb-3 text-cyan-500/50" />
+            <p className="font-medium text-muted-foreground">Click to upload gallery images</p>
+            <p className="text-sm text-muted-foreground/60 mt-1">JPG, PNG, WebP — multiple files supported</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Upload more zone */}
+          <div
+            className="border border-dashed border-border rounded-xl p-4 flex items-center gap-3 cursor-pointer hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all"
+            onClick={() => fileRef.current?.click()}
+          >
+            <div className="w-9 h-9 rounded-lg bg-cyan-500/10 flex items-center justify-center shrink-0">
+              <Upload className="w-4 h-4 text-cyan-500" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Upload more images</p>
+              <p className="text-xs text-muted-foreground">Click to add more photos to your gallery</p>
+            </div>
+          </div>
+
+          {/* Image grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {images.map((img, index) => (
+              <Card key={img.id} className="bg-card/50 border-border group overflow-hidden">
+                <div className="relative aspect-4/3">
+                  <img
+                    src={img.url}
+                    alt={img.caption ?? "Gallery"}
+                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+                  />
+                  {/* Overlay actions */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-8 w-8 bg-white/10 hover:bg-white/20 text-white disabled:opacity-30"
+                      onClick={() => moveImage(index, "up")}
+                      disabled={index === 0}
+                      title="Move left"
+                    >←</Button>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-8 w-8 bg-red-500/80 hover:bg-red-500 text-white"
+                      onClick={() => deleteImage(img)}
+                      disabled={deletingId === img.id}
+                      title="Delete"
+                    >
+                      {deletingId === img.id
+                        ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        : <Trash2 className="w-3.5 h-3.5" />
+                      }
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-8 w-8 bg-white/10 hover:bg-white/20 text-white disabled:opacity-30"
+                      onClick={() => moveImage(index, "down")}
+                      disabled={index === images.length - 1}
+                      title="Move right"
+                    >→</Button>
+                  </div>
+                  {/* Order badge */}
+                  <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center">
+                    <span className="text-[9px] text-white font-mono">{index + 1}</span>
+                  </div>
+                </div>
+
+                {/* Caption editor */}
+                <CardContent className="p-2">
+                  {editingCaption?.id === img.id ? (
+                    <div className="flex gap-1">
+                      <Input
+                        value={editingCaption.value}
+                        onChange={(e) => setEditingCaption({ id: img.id, value: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveCaption(img.id, editingCaption.value);
+                          if (e.key === "Escape") setEditingCaption(null);
+                        }}
+                        placeholder="Caption…"
+                        className="h-7 text-xs"
+                        autoFocus
+                      />
+                      <Button size="icon" className="h-7 w-7 shrink-0" onClick={() => saveCaption(img.id, editingCaption.value)}>✓</Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setEditingCaption(null)}><X className="w-3 h-3" /></Button>
+                    </div>
+                  ) : (
+                    <button
+                      className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors truncate"
+                      onClick={() => setEditingCaption({ id: img.id, value: img.caption ?? "" })}
+                    >
+                      {img.caption ?? <span className="italic opacity-50">Add caption…</span>}
+                    </button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Supabase hint */}
+      <Card className="bg-muted/30 border-dashed">
+        <CardContent className="p-4">
+          <p className="text-xs text-muted-foreground font-mono">
+            💡 Requires a <strong>gallery_images</strong> table in Supabase with columns:
+            <code className="ml-1 bg-background/60 px-1 rounded">id uuid, url text, caption text, sort_order int</code>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

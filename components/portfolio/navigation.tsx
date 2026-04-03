@@ -4,16 +4,18 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { getProfile, type Profile } from "@/lib/supabase/data";
 import { useTheme } from "next-themes";
-import { Sun, Moon } from "lucide-react";
+import {
+  Sun, Moon, Home, User, Zap, FolderKanban, Award, Mail, MessageSquare
+} from "lucide-react";
 
 const navItems = [
-  { name: "Home", href: "#home" },
-  { name: "About", href: "#about" },
-  { name: "Skills", href: "#skills" },
-  { name: "Projects", href: "#projects" },
-  { name: "Certificates", href: "#certificates" },
-  { name: "Contact", href: "#contact" },
-  { name: "Feedback", href: "#feedback" },
+  { name: "Home",         href: "#home",         icon: Home },
+  { name: "About",        href: "#about",         icon: User },
+  { name: "Skills",       href: "#skills",        icon: Zap },
+  { name: "Projects",     href: "#projects",      icon: FolderKanban },
+  { name: "Certificates", href: "#certificates",  icon: Award },
+  { name: "Contact",      href: "#contact",       icon: Mail },
+  { name: "Feedback",     href: "#feedback",      icon: MessageSquare },
 ];
 
 /** Smooth-scroll to a section and update the URL hash */
@@ -23,13 +25,12 @@ function scrollToSection(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
   const el = document.getElementById(id);
   if (el) {
     el.scrollIntoView({ behavior: "smooth" });
-    // Update the URL without reloading
     window.history.pushState(null, "", href);
   }
 }
 
 function ThemeToggleButton() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -40,31 +41,26 @@ function ThemeToggleButton() {
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="relative p-2 rounded-lg hover:bg-secondary transition-all duration-500 text-muted-foreground hover:text-foreground overflow-hidden"
+      className="group relative flex items-center justify-center w-10 h-10 rounded-xl hover:bg-secondary transition-all duration-300 text-muted-foreground hover:text-foreground"
       aria-label="Toggle theme"
-      style={{ isolation: "isolate" }}
     >
-      <span
-        className={cn(
-          "absolute inset-0 rounded-lg transition-all duration-700 pointer-events-none",
-          isDark
-            ? "bg-slate-900/0 scale-0 opacity-0"
-            : "bg-amber-50/0 scale-0 opacity-0"
-        )}
-      />
       <Sun
         className={cn(
-          "h-5 w-5 transition-all duration-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+          "h-4 w-4 transition-all duration-500 absolute",
           isDark ? "opacity-0 rotate-180 scale-0" : "opacity-100 rotate-0 scale-100"
         )}
       />
       <Moon
         className={cn(
-          "h-5 w-5 transition-all duration-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+          "h-4 w-4 transition-all duration-500 absolute",
           isDark ? "opacity-100 rotate-0 scale-100" : "opacity-0 rotate-180 scale-0"
         )}
       />
       <span className="invisible">T</span>
+      {/* Tooltip */}
+      <span className="absolute left-full ml-3 px-2 py-1 text-xs font-medium bg-popover text-popover-foreground border border-border rounded-lg shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-200 pointer-events-none z-50">
+        {isDark ? "Light mode" : "Dark mode"}
+      </span>
     </button>
   );
 }
@@ -82,9 +78,18 @@ export function Navigation() {
 
   useEffect(() => {
     setMounted(true);
+
+    const initialHash = window.location.hash;
+    if (initialHash) {
+      const id = initialHash.replace("#", "");
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: "smooth" });
+      }, 300);
+    }
+
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
-
       const sections = navItems.map((item) => item.href.slice(1));
       for (const section of sections.reverse()) {
         const element = document.getElementById(section);
@@ -103,7 +108,6 @@ export function Navigation() {
   }, []);
 
   const showProfileInNav = scrolled && activeSection !== "home";
-
   if (!mounted) return null;
 
   const initials = profile?.name
@@ -122,10 +126,16 @@ export function Navigation() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
+
           {/* Logo */}
           <a
             href="#home"
-            onClick={(e) => scrollToSection(e, "#home")}
+            onClick={(e) => {
+              e.preventDefault();
+              const el = document.getElementById("home");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+              window.history.pushState(null, "", window.location.pathname);
+            }}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             <div
@@ -152,24 +162,40 @@ export function Navigation() {
             </span>
           </a>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation — icon only with hover tooltip */}
           <div className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => (
-              <a
-                key={item.name}
-                href={item.href}
-                onClick={(e) => scrollToSection(e, item.href)}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300",
-                  activeSection === item.href.slice(1)
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                )}
-              >
-                {item.name}
-              </a>
-            ))}
-            <div className="ml-2 border-l border-border pl-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeSection === item.href.slice(1);
+              return (
+                <a
+                  key={item.name}
+                  href={item.href}
+                  onClick={(e) => scrollToSection(e, item.href)}
+                  className={cn(
+                    "group relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  )}
+                  aria-label={item.name}
+                >
+                  <Icon className="w-4 h-4" />
+
+                  {/* Active indicator dot */}
+                  {isActive && (
+                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
+                  )}
+
+                  {/* Hover tooltip */}
+                  <span className="absolute top-full mt-2 px-2 py-1 text-xs font-medium bg-popover text-popover-foreground border border-border rounded-lg shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 pointer-events-none z-50">
+                    {item.name}
+                  </span>
+                </a>
+              );
+            })}
+
+            <div className="ml-1 border-l border-border pl-1">
               <ThemeToggleButton />
             </div>
           </div>
@@ -200,24 +226,28 @@ export function Navigation() {
         )}
       >
         <div className="px-4 py-3 space-y-1">
-          {navItems.map((item) => (
-            <a
-              key={item.name}
-              href={item.href}
-              onClick={(e) => {
-                scrollToSection(e, item.href);
-                setMobileMenuOpen(false);
-              }}
-              className={cn(
-                "flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300",
-                activeSection === item.href.slice(1)
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-              )}
-            >
-              {item.name}
-            </a>
-          ))}
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <a
+                key={item.name}
+                href={item.href}
+                onClick={(e) => {
+                  scrollToSection(e, item.href);
+                  setMobileMenuOpen(false);
+                }}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300",
+                  activeSection === item.href.slice(1)
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {item.name}
+              </a>
+            );
+          })}
         </div>
       </div>
     </nav>

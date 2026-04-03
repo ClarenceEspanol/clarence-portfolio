@@ -13,7 +13,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Eye, EyeOff, KeyRound, AlertCircle, Loader2, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, KeyRound, AlertCircle, Loader2, ShieldCheck, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,11 +89,26 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 relative">
       {/* Subtle background orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
+      </div>
+
+      {/* ── Back to Portfolio button ── */}
+      <div className="absolute top-5 left-5">
+        <Button
+          variant="ghost"
+          size="sm"
+          asChild
+          className="text-muted-foreground hover:text-foreground group gap-1.5"
+        >
+          <a href="/">
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+            Back to Portfolio
+          </a>
+        </Button>
       </div>
 
       <Card className="w-full max-w-md relative bg-card/80 backdrop-blur border-border shadow-2xl">

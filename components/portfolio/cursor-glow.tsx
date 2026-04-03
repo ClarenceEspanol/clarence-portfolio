@@ -41,7 +41,7 @@ export function CursorGlow() {
       style={{ opacity: isVisible ? 1 : 0 }}
     >
       <div
-        className="absolute w-[300px] h-[300px] rounded-full"
+        className="absolute w-75 h-75 rounded-full"
         style={{
           background:
             "radial-gradient(circle, oklch(0.72 0.15 220 / 0.05) 0%, transparent 75%)",
