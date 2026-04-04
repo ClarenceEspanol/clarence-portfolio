@@ -410,9 +410,6 @@ export function ChatPage() {
       .order("created_at", { ascending: true })
       .then(({ data }) => {
         setMessages((data as ChatMessage[]) || []);
-        // Use two rAF ticks: first for React to commit the DOM, second to
-        // ensure the browser has laid out the list before we unlock
-        // auto-scroll. This prevents the page jumping to the footer on reload.
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             initialLoadDone.current = true;

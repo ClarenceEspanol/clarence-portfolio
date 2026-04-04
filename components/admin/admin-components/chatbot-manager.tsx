@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Bot, RefreshCw, Trash2, Send, KeyRound, User, FileText,
-  AlertCircle, Save, MessageSquare,
+  AlertCircle, Save, MessageSquare, MessageCircle,
 } from "lucide-react";
 import { toast } from "./toast";
 import type { ChatSession, ChatbotMessage } from "./types";
@@ -239,7 +240,7 @@ export function ChatbotManager() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2"><Bot className="w-6 h-6 text-primary" />Chatbot Conversations</h2>
-          <p className="text-muted-foreground">{sessions.length} session{sessions.length !== 1 ? "s" : ""} total — you can reply directly to visitors</p>
+          <p className="text-muted-foreground">{sessions.filter(s => !s.isDirectChat).length} AI · {sessions.filter(s => s.isDirectChat).length} Direct — you can reply directly to visitors</p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchSessions} disabled={loading}>
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
@@ -248,29 +249,56 @@ export function ChatbotManager() {
 
       {loading ? (
         <div className="flex justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-      ) : sessions.length === 0 ? (
-        <Card className="bg-card/50"><CardContent className="text-center py-16"><Bot className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" /><h3 className="font-medium text-lg mb-1">No chatbot conversations yet</h3><p className="text-sm text-muted-foreground">When visitors use the AI chatbot, their conversations will appear here.</p></CardContent></Card>
       ) : (
+        <Tabs defaultValue="ai" className="space-y-4">
+          <TabsList className="h-10">
+            <TabsTrigger value="ai" className="gap-2 text-sm">
+              <Bot className="w-4 h-4" />
+              AI Conversations
+              {sessions.filter((s) => !s.isDirectChat).length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-primary/15 text-primary">
+                  {sessions.filter((s) => !s.isDirectChat).length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="direct" className="gap-2 text-sm">
+              <MessageCircle className="w-4 h-4" />
+              Direct Messages
+              {sessions.filter((s) => s.isDirectChat).length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-500">
+                  {sessions.filter((s) => s.isDirectChat).length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          {(["ai", "direct"] as const).map((tab) => {
+            const tabSessions = sessions.filter((s) => tab === "direct" ? s.isDirectChat : !s.isDirectChat);
+            const emptyIcon = tab === "direct" ? <MessageCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" /> : <Bot className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />;
+            const emptyText = tab === "direct" ? "No direct messages yet" : "No AI conversations yet";
+            const emptyDesc = tab === "direct" ? "Direct messages from visitors who provide their name and email will appear here." : "When visitors use the AI chatbot anonymously, their conversations will appear here.";
+            return (
+              <TabsContent key={tab} value={tab}>
+                {tabSessions.length === 0 ? (
+                  <Card className="bg-card/50"><CardContent className="text-center py-16">{emptyIcon}<h3 className="font-medium text-lg mb-1">{emptyText}</h3><p className="text-sm text-muted-foreground">{emptyDesc}</p></CardContent></Card>
+                ) : (
         <div className="grid gap-4 lg:grid-cols-5">
           {/* Session list */}
           <div className="lg:col-span-2 space-y-2">
-            {sessions.map((session) => {
+            {tabSessions.map((session) => {
               const lastMsg = session.messages[session.messages.length - 1];
               const isSelected = selectedSession === session.session_id;
               const userMsgs = session.messages.filter((m) => m.role === "user").length;
               return (
                 <div key={session.session_id} onClick={() => setSelectedSession(session.session_id)}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? "bg-primary/10 border-primary/40" : "bg-card/50 border-border hover:border-primary/30 hover:bg-secondary/30"}`}>
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? tab === "direct" ? "bg-blue-500/10 border-blue-500/40" : "bg-primary/10 border-primary/40" : "bg-card/50 border-border hover:border-primary/30 hover:bg-secondary/30"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-xs font-bold text-primary">
-                        {session.displayName[0]?.toUpperCase() ?? "V"}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${tab === "direct" ? "bg-blue-500/10 text-blue-500" : "bg-primary/10 text-primary"}`}>
+                        {tab === "direct" ? (session.displayName[0]?.toUpperCase() ?? "V") : <Bot className="w-4 h-4" />}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-sm font-medium truncate">{session.displayName}</p>
-                          {session.isDirectChat && <Badge variant="outline" className="text-[9px] px-1.5 py-0 text-primary border-primary/40 shrink-0">Direct</Badge>}
-                        </div>
+                        <p className="text-sm font-medium truncate">{session.displayName}</p>
                         {session.displayEmail && <p className="text-[10px] text-muted-foreground truncate">{session.displayEmail}</p>}
                         <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {lastMsg?.content ? `${lastMsg.content.slice(0, 45)}${lastMsg.content.length > 45 ? "…" : ""}` : lastMsg?.file_type === "image" ? "📷 Image" : lastMsg?.file_type === "video" ? "🎬 Video" : lastMsg?.file_type === "audio" ? "🎤 Voice message" : lastMsg?.file_type === "file" ? `📎 ${lastMsg.file_name ?? "File"}` : ""}
@@ -289,8 +317,8 @@ export function ChatbotManager() {
 
           {/* Conversation thread */}
           <div className="lg:col-span-3">
-            {!activeSession ? (
-              <Card className="bg-card/50 h-full"><CardContent className="flex flex-col items-center justify-center py-16 text-center"><MessageSquare className="w-10 h-10 mb-3 text-muted-foreground/30" /><p className="text-sm text-muted-foreground">Select a session to view the conversation</p></CardContent></Card>
+            {!activeSession || !tabSessions.find((s) => s.session_id === selectedSession) ? (
+              <Card className="bg-card/50 h-full"><CardContent className="flex flex-col items-center justify-center py-16 text-center"><MessageSquare className="w-10 h-10 mb-3 text-muted-foreground/30" /><p className="text-sm text-muted-foreground">Select a conversation to view messages</p></CardContent></Card>
             ) : (
               <Card className="bg-card/50 flex flex-col h-full">
                 <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-border">
@@ -341,19 +369,33 @@ export function ChatbotManager() {
                   })}
                   <div ref={messagesEndRef} />
                 </CardContent>
-                <div className="px-4 py-3 border-t border-border bg-card/50">
-                  <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><KeyRound className="w-3 h-3" />Reply as admin — visitor will see this in real-time</p>
-                  <div className="flex gap-2">
-                    <Input value={replyText} onChange={(e) => setReplyText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); }}} placeholder="Type your reply..." className="flex-1 text-sm" disabled={sending} />
-                    <Button size="sm" onClick={sendAdminReply} disabled={!replyText.trim() || sending} className="shrink-0">
-                      <Send className="w-4 h-4 mr-1.5" />{sending ? "Sending…" : "Reply"}
-                    </Button>
+                {tab === "direct" ? (
+                  <div className="px-4 py-3 border-t border-border bg-card/50">
+                    <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><KeyRound className="w-3 h-3" />Reply as admin — visitor will see this in real-time</p>
+                    <div className="flex gap-2">
+                      <Input value={replyText} onChange={(e) => setReplyText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); }}} placeholder="Type your reply..." className="flex-1 text-sm" disabled={sending} />
+                      <Button size="sm" onClick={sendAdminReply} disabled={!replyText.trim() || sending} className="shrink-0">
+                        <Send className="w-4 h-4 mr-1.5" />{sending ? "Sending…" : "Reply"}
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="px-4 py-3 border-t border-border bg-muted/30">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Bot className="w-3.5 h-3.5 shrink-0" />
+                      AI-only conversation — no user identity to reply to. View only.
+                    </p>
+                  </div>
+                )}
               </Card>
             )}
-          </div>
-        </div>
+              </div>
+            </div>
+                )}
+              </TabsContent>
+            );
+          })}
+        </Tabs>
       )}
     </div>
   );

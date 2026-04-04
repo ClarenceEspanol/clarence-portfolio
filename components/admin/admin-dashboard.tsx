@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   LayoutDashboard, FolderKanban, Award, Sparkles, User, Home,
-  MessageSquare, Mail, Bot, Images, LogOut, KeyRound,
-  MessageCircleHeart, RefreshCw,
+  MessageSquare, MessageCircle, Mail, Bot, Images, LogOut, KeyRound,
+  MessageCircleHeart, RefreshCw, Type, Star,
 } from "lucide-react";
 
 // ── Sub-components (split into admin-components/) ────────────────────────────
@@ -24,6 +25,7 @@ import { SkillsManager } from "./admin-components/skills-manager";
 import { ProfileManager } from "./admin-components/profile-manager";
 import { FeedbackManager } from "./admin-components/feedback-manager";
 import { GalleryManager } from "./admin-components/gallery-manager";
+import { HeroRolesManager } from "./admin-components/hero-roles-manager";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 import type { ContactMessage } from "./admin-components/types";
@@ -43,6 +45,13 @@ export function AdminDashboard() {
   const [stats, setStats] = useState({ totalMessages: 0, unreadMessages: 0, todayMessages: 0 });
   const [overviewCounts, setOverviewCounts] = useState({ projects: 0, certificates: 0 });
   const [chatbotSessionCount, setChatbotSessionCount] = useState(0);
+
+  // ── Overview previews ─────────────────────────────────────────────────────
+  interface RecentChatMsg { session_id: string; content: string; role: string; created_at: string; user_name: string | null; user_email: string | null; is_direct: boolean; }
+  interface RecentFeedback { id: string; name: string | null; message: string; rating: number; emoji: string; created_at: string; }
+  const [recentAiMsgs, setRecentAiMsgs]         = useState<RecentChatMsg[]>([]);
+  const [recentDirectMsgs, setRecentDirectMsgs] = useState<RecentChatMsg[]>([]);
+  const [recentFeedbacks, setRecentFeedbacks]   = useState<RecentFeedback[]>([]);
 
   const fetchMessages = useCallback(async () => {
     setIsLoadingMessages(true);
@@ -69,6 +78,35 @@ export function AdminDashboard() {
     setOverviewCounts({ projects: projCount ?? 0, certificates: certCount ?? 0 });
     const uniqueSessions = new Set((chatData || []).map((r: { session_id: string }) => r.session_id));
     setChatbotSessionCount(uniqueSessions.size);
+
+    // Recent AI chatbot messages (no user_name/email = anonymous AI chat)
+    const { data: recentAi } = await supabase
+      .from("chatbot_conversations")
+      .select("session_id, content, role, created_at, user_name, user_email")
+      .eq("role", "user")
+      .is("user_name", null)
+      .is("user_email", null)
+      .order("created_at", { ascending: false })
+      .limit(3);
+    setRecentAiMsgs((recentAi || []).map((m: { session_id: string; content: string; role: string; created_at: string; user_name: string | null; user_email: string | null }) => ({ ...m, is_direct: false })));
+
+    // Recent direct chat messages (have user_name or user_email)
+    const { data: recentDirect } = await supabase
+      .from("chatbot_conversations")
+      .select("session_id, content, role, created_at, user_name, user_email")
+      .eq("role", "user")
+      .not("user_email", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(3);
+    setRecentDirectMsgs((recentDirect || []).map((m: { session_id: string; content: string; role: string; created_at: string; user_name: string | null; user_email: string | null }) => ({ ...m, is_direct: true })));
+
+    // Recent feedback (last 3)
+    const { data: recentFb } = await supabase
+      .from("feedbacks")
+      .select("id, name, message, rating, emoji, created_at")
+      .order("created_at", { ascending: false })
+      .limit(3);
+    setRecentFeedbacks(recentFb || []);
   }, [supabase]);
 
   // Owner-only guard
@@ -144,37 +182,72 @@ export function AdminDashboard() {
       {/* ── Main ── */}
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-9 w-full max-w-5xl">
-            <TabsTrigger value="overview"><LayoutDashboard className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Overview</span></TabsTrigger>
-            <TabsTrigger value="messages" className="relative">
-              <MessageSquare className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Messages</span>
-              {stats.unreadMessages > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
-                  {stats.unreadMessages}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="chatbot"><Bot className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Chatbot</span></TabsTrigger>
-            <TabsTrigger value="projects"><FolderKanban className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Projects</span></TabsTrigger>
-            <TabsTrigger value="certificates"><Award className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Certs</span></TabsTrigger>
-            <TabsTrigger value="skills"><Sparkles className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Skills</span></TabsTrigger>
-            <TabsTrigger value="profile"><User className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Profile</span></TabsTrigger>
-            <TabsTrigger value="feedback"><MessageCircleHeart className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Feedback</span></TabsTrigger>
-            <TabsTrigger value="gallery"><Images className="w-4 h-4" /><span className="hidden sm:inline ml-1.5">Gallery</span></TabsTrigger>
-          </TabsList>
+          {/* ── Tab Nav — icon-only with tooltips, matches portfolio nav style ── */}
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-card/50 border border-border w-fit">
+            {(
+              [
+                { value: "overview",     Icon: LayoutDashboard,   label: "Overview" },
+                { value: "messages",     Icon: MessageSquare,     label: "Messages",    badge: stats.unreadMessages > 0 ? stats.unreadMessages : undefined },
+                { value: "chatbot",      Icon: Bot,               label: "Chatbot",     badge: chatbotSessionCount > 0 ? chatbotSessionCount : undefined },
+                { value: "projects",     Icon: FolderKanban,      label: "Projects" },
+                { value: "certificates", Icon: Award,             label: "Certificates" },
+                { value: "skills",       Icon: Sparkles,          label: "Skills" },
+                { value: "profile",      Icon: User,              label: "Profile" },
+                { value: "hero-roles",   Icon: Type,              label: "Hero Roles" },
+                { value: "feedback",     Icon: MessageCircleHeart, label: "Feedback" },
+                { value: "gallery",      Icon: Images,            label: "Gallery" },
+              ] as { value: string; Icon: React.ElementType; label: string; badge?: number }[]
+            ).map(({ value, Icon, label, badge }) => {
+              const isActive = activeTab === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => setActiveTab(value)}
+                  className={cn(
+                    "group relative flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-200",
+                    isActive
+                      ? "bg-primary/10 text-primary shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  )}
+                  aria-label={label}
+                >
+                  <Icon className="w-4 h-4" />
+                  {isActive && (
+                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
+                  )}
+                  {badge !== undefined && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {badge > 9 ? "9+" : badge}
+                    </span>
+                  )}
+                  <span className="absolute top-full mt-2 px-2 py-1 text-xs font-medium bg-popover text-popover-foreground border border-border rounded-lg shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 pointer-events-none z-50">
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
           {/* ── Overview ── */}
           <TabsContent value="overview" className="space-y-6">
+            {/* Stats row */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <StatsCard title="Total Messages" value={String(stats.totalMessages)} description="Contact submissions" icon={<MessageSquare className="w-4 h-4" />} trend={stats.todayMessages > 0 ? `+${stats.todayMessages} today` : undefined} />
               <StatsCard title="Unread Messages" value={String(stats.unreadMessages)} description="Awaiting response" icon={<Mail className="w-4 h-4" />} highlight={stats.unreadMessages > 0} />
               <StatsCard title="Projects" value={String(overviewCounts.projects)} description="Active projects" icon={<FolderKanban className="w-4 h-4" />} />
               <StatsCard title="Certificates" value={String(overviewCounts.certificates)} description="Total certificates" icon={<Award className="w-4 h-4" />} />
             </div>
+
+            {/* Recent activity — 2×2 grid */}
             <div className="grid gap-4 md:grid-cols-2">
+
+              {/* Recent Contact Messages */}
               <Card className="bg-card/50">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <div><CardTitle className="text-base">Recent Messages</CardTitle><CardDescription>Latest contact submissions</CardDescription></div>
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary" />Contact Messages</CardTitle>
+                    <CardDescription>Latest form submissions</CardDescription>
+                  </div>
                   <Button variant="ghost" size="sm" onClick={() => setActiveTab("messages")}>View All</Button>
                 </CardHeader>
                 <CardContent>
@@ -183,7 +256,7 @@ export function AdminDashboard() {
                   ) : messages.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground"><MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" /><p className="text-sm">No messages yet</p></div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {messages.slice(0, 3).map((msg) => (
                         <div key={msg.id} className={`p-3 rounded-lg border ${msg.is_read ? "bg-secondary/30 border-border" : "bg-primary/5 border-primary/20"}`}>
                           <div className="flex items-start justify-between gap-2">
@@ -193,7 +266,7 @@ export function AdminDashboard() {
                                 {!msg.is_read && <Badge variant="default" className="text-[10px] px-1.5 py-0">New</Badge>}
                               </div>
                               <p className="text-xs text-muted-foreground truncate">{msg.email}</p>
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{msg.message}</p>
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{msg.message}</p>
                             </div>
                             <span className="text-xs text-muted-foreground/70 whitespace-nowrap">{formatDate(msg.created_at)}</span>
                           </div>
@@ -203,26 +276,137 @@ export function AdminDashboard() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Recent Direct Messages (chatpage) */}
               <Card className="bg-card/50">
-                <CardHeader><CardTitle className="text-base">Quick Actions</CardTitle><CardDescription>Common tasks</CardDescription></CardHeader>
-                <CardContent className="space-y-2">
-                  {[
-                    { label: "View Messages",    icon: <MessageSquare className="w-4 h-4 mr-2" />,    tab: "messages",     badge: stats.unreadMessages > 0 ? `${stats.unreadMessages} unread` : undefined },
-                    { label: "Chatbot History",  icon: <Bot className="w-4 h-4 mr-2" />,              tab: "chatbot",      badge: chatbotSessionCount > 0 ? `${chatbotSessionCount} sessions` : undefined },
-                    { label: "Manage Projects",  icon: <FolderKanban className="w-4 h-4 mr-2" />,     tab: "projects" },
-                    { label: "Add Certificate",  icon: <Award className="w-4 h-4 mr-2" />,            tab: "certificates" },
-                    { label: "Update Profile",   icon: <User className="w-4 h-4 mr-2" />,             tab: "profile" },
-                    { label: "Manage Gallery",   icon: <Images className="w-4 h-4 mr-2" />,           tab: "gallery" },
-                    { label: "View Feedback",    icon: <MessageCircleHeart className="w-4 h-4 mr-2" />, tab: "feedback" },
-                  ].map((action) => (
-                    <Button key={action.tab} variant="ghost" className="w-full justify-start" onClick={() => setActiveTab(action.tab)}>
-                      {action.icon}{action.label}
-                      {action.badge && <Badge variant="secondary" className="ml-auto">{action.badge}</Badge>}
-                    </Button>
-                  ))}
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MessageCircle className="w-4 h-4 text-primary" />Direct Messages
+                    </CardTitle>
+                    <CardDescription>Messages from authenticated visitors</CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("chatbot")}>View All</Button>
+                </CardHeader>
+                <CardContent>
+                  {recentDirectMsgs.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-50" /><p className="text-sm">No direct messages yet</p></div>
+                  ) : (
+                    <div className="space-y-2">
+                      {recentDirectMsgs.map((msg, i) => {
+                        const name = msg.user_name ?? msg.user_email ?? "Visitor";
+                        const initial = name[0]?.toUpperCase() ?? "V";
+                        return (
+                          <div key={`direct-${msg.session_id}-${i}`} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-primary/20 bg-primary/5">
+                            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">{initial}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <p className="text-xs font-medium truncate">{name}</p>
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 text-primary border-primary/40 shrink-0">Direct</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground line-clamp-1">{msg.content || "—"}</p>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap shrink-0">{formatDate(msg.created_at)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Recent AI Chatbot */}
+              <Card className="bg-card/50">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2"><Bot className="w-4 h-4 text-primary" />AI Chatbot</CardTitle>
+                    <CardDescription>Recent anonymous AI conversations</CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("chatbot")}>View All</Button>
+                </CardHeader>
+                <CardContent>
+                  {recentAiMsgs.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><Bot className="w-8 h-8 mx-auto mb-2 opacity-50" /><p className="text-sm">No AI chat activity yet</p></div>
+                  ) : (
+                    <div className="space-y-2">
+                      {recentAiMsgs.map((msg, i) => (
+                        <div key={`ai-${msg.session_id}-${i}`} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border bg-secondary/20">
+                          <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
+                            <Bot className="w-3.5 h-3.5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <p className="text-xs font-medium text-muted-foreground">Anonymous visitor</p>
+                              <Badge variant="outline" className="text-[9px] px-1.5 py-0 shrink-0">AI Chat</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{msg.content || "—"}</p>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap shrink-0">{formatDate(msg.created_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Recent Feedback */}
+              <Card className="bg-card/50">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2"><MessageCircleHeart className="w-4 h-4 text-primary" />Recent Feedback</CardTitle>
+                    <CardDescription>Latest portfolio reviews</CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setActiveTab("feedback")}>View All</Button>
+                </CardHeader>
+                <CardContent>
+                  {recentFeedbacks.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><MessageCircleHeart className="w-8 h-8 mx-auto mb-2 opacity-50" /><p className="text-sm">No feedback yet</p></div>
+                  ) : (
+                    <div className="space-y-2">
+                      {recentFeedbacks.map((fb) => (
+                        <div key={fb.id} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border bg-secondary/20">
+                          <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-base shrink-0 border border-border">{fb.emoji}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <p className="text-xs font-medium truncate">{fb.name || <span className="italic text-muted-foreground">Anonymous</span>}</p>
+                              <div className="flex gap-0.5 shrink-0">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                  <Star key={i} className={`w-2.5 h-2.5 ${i < fb.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+                                ))}
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{fb.message}</p>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap shrink-0">{formatDate(fb.created_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
+
+            {/* Quick Actions */}
+            <Card className="bg-card/50">
+              <CardHeader><CardTitle className="text-base">Quick Actions</CardTitle><CardDescription>Jump to any section</CardDescription></CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {[
+                  { label: "View Messages",    icon: <MessageSquare className="w-4 h-4" />,         tab: "messages",     badge: stats.unreadMessages > 0 ? `${stats.unreadMessages} unread` : undefined },
+                  { label: "Chatbot History",  icon: <Bot className="w-4 h-4" />,                   tab: "chatbot",      badge: chatbotSessionCount > 0 ? `${chatbotSessionCount} sessions` : undefined },
+                  { label: "Manage Projects",  icon: <FolderKanban className="w-4 h-4" />,          tab: "projects" },
+                  { label: "Add Certificate",  icon: <Award className="w-4 h-4" />,                 tab: "certificates" },
+                  { label: "Update Profile",   icon: <User className="w-4 h-4" />,                  tab: "profile" },
+                  { label: "Hero Roles",       icon: <Type className="w-4 h-4" />,                  tab: "hero-roles" },
+                  { label: "Manage Gallery",   icon: <Images className="w-4 h-4" />,                tab: "gallery" },
+                  { label: "View Feedback",    icon: <MessageCircleHeart className="w-4 h-4" />,    tab: "feedback" },
+                ].map((action) => (
+                  <Button key={action.tab} variant="outline" size="sm" className="gap-2" onClick={() => setActiveTab(action.tab)}>
+                    {action.icon}{action.label}
+                    {action.badge && <Badge variant="secondary" className="ml-1">{action.badge}</Badge>}
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ── Messages ── */}
@@ -268,6 +452,7 @@ export function AdminDashboard() {
           <TabsContent value="certificates"><CertificatesManager /></TabsContent>
           <TabsContent value="skills"><SkillsManager /></TabsContent>
           <TabsContent value="profile"><ProfileManager /></TabsContent>
+          <TabsContent value="hero-roles"><HeroRolesManager /></TabsContent>
           <TabsContent value="feedback"><FeedbackManager /></TabsContent>
           <TabsContent value="gallery"><GalleryManager /></TabsContent>
         </Tabs>

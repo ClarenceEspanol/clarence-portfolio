@@ -19,8 +19,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            // Added Supabase URL to connect-src and img-src so your data loads
-            value: "default-src 'self'; img-src 'self' data: https: https://aojtukqcnywkjnzdpqqe.supabase.co; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://aojtukqcnywkjnzdpqqe.supabase.co; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests;"
+            value: "default-src 'self'; img-src 'self' data: https: https://aojtukqcnywkjnzdpqqe.supabase.co; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://aojtukqcnywkjnzdpqqe.supabase.co wss://aojtukqcnywkjnzdpqqe.supabase.co; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests;"
           },
           {
             key: 'X-Frame-Options',

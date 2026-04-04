@@ -9,9 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { createClient } from "@/lib/supabase/client";
 import { getProfile, getSkills, getProjects, getCertificates, type Profile } from "@/lib/supabase/data";
 
-const roles = [
+// ─── Default fallback roles (used if DB is empty) ────────────────────────────
+const DEFAULT_ROLES = [
   "Full Stack Developer",
   "UI/UX Designer",
   "Tech Enthusiast",
@@ -53,17 +55,29 @@ function AvailabilityBadge({ status }: { status: Profile["availability_status"] 
   );
 }
 
-function TypewriterRole() {
+// ─── Typewriter — now accepts roles from DB ───────────────────────────────────
+function TypewriterRole({ roles }: { roles: string[] }) {
   const [displayText, setDisplayText] = useState("");
   const [roleIndex, setRoleIndex] = useState(0);
   const [phase, setPhase] = useState<"typing" | "pause" | "erasing">("typing");
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Reset when roles change (e.g. loaded from DB)
   useEffect(() => {
-    const currentRole = roles[roleIndex];
+    setDisplayText("");
+    setRoleIndex(0);
+    setPhase("typing");
+  }, [roles]);
+
+  useEffect(() => {
+    if (roles.length === 0) return;
+    const currentRole = roles[roleIndex % roles.length];
     if (phase === "typing") {
       if (displayText.length < currentRole.length) {
-        timeoutRef.current = setTimeout(() => setDisplayText(currentRole.slice(0, displayText.length + 1)), 80);
+        timeoutRef.current = setTimeout(
+          () => setDisplayText(currentRole.slice(0, displayText.length + 1)),
+          80
+        );
       } else {
         timeoutRef.current = setTimeout(() => setPhase("pause"), 1800);
       }
@@ -78,7 +92,7 @@ function TypewriterRole() {
       }
     }
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
-  }, [displayText, phase, roleIndex]);
+  }, [displayText, phase, roleIndex, roles]);
 
   return (
     <div className="h-12 mb-8 flex items-center justify-center">
@@ -150,9 +164,7 @@ async function generatePortfolioPptx(data: PortfolioData): Promise<void> {
       pptx.subject = "Portfolio";
       pptx.title   = profile.name + " — Portfolio";
 
-      function bg(slide) {
-        slide.background = { color: BG };
-      }
+      function bg(slide) { slide.background = { color: BG }; }
       function accent(slide, y) {
         slide.addShape(pptx.ShapeType.rect, { x: 0, y: y, w: 13.33, h: 0.04, fill: { color: ACC } });
       }
@@ -161,7 +173,7 @@ async function generatePortfolioPptx(data: PortfolioData): Promise<void> {
         accent(slide, y + 0.65);
       }
 
-      // ── Slide 1: Title ──────────────────────────────────────────────────────
+      // ── Slide 1: Title ──
       const s1 = pptx.addSlide();
       bg(s1);
       s1.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 7.5, fill: { color: "0a1628" } });
@@ -174,122 +186,50 @@ async function generatePortfolioPptx(data: PortfolioData): Promise<void> {
       ].filter(Boolean), { x: 0.8, y: 3.8, w: 11.73, h: 0.5, fontSize: 13, fontFace: "Calibri", align: "center" });
       s1.addText("Portfolio Presentation", { x: 0.8, y: 6.7, w: 11.73, h: 0.4, fontSize: 11, color: DIM, fontFace: "Calibri", align: "center" });
 
-      // ── Slide 2: About Me ────────────────────────────────────────────────────
-      const s2 = pptx.addSlide();
-      bg(s2);
-      heading(s2, "About Me", 0.3);
-      let y2 = 1.1;
-      if (profile.bio) {
-        s2.addText(profile.bio, { x: 0.5, y: y2, w: 12.33, h: 1.4, fontSize: 13, color: WHITE, fontFace: "Calibri", wrap: true });
-        y2 += 1.6;
-      }
-      if (profile.experience) {
-        s2.addText("Experience", { x: 0.5, y: y2, w: 12.33, h: 0.35, fontSize: 14, bold: true, color: ACC, fontFace: "Calibri" });
-        s2.addText(profile.experience, { x: 0.5, y: y2 + 0.35, w: 12.33, h: 1.0, fontSize: 12, color: WHITE, fontFace: "Calibri", wrap: true });
-        y2 += 1.5;
-      }
-      if (profile.education) {
-        s2.addText("Education", { x: 0.5, y: y2, w: 12.33, h: 0.35, fontSize: 14, bold: true, color: ACC, fontFace: "Calibri" });
-        s2.addText(profile.education, { x: 0.5, y: y2 + 0.35, w: 12.33, h: 1.0, fontSize: 12, color: WHITE, fontFace: "Calibri", wrap: true });
-      }
-
-      // ── Slide 3: Skills ──────────────────────────────────────────────────────
-      const s3 = pptx.addSlide();
-      bg(s3);
-      heading(s3, "Skills & Technologies", 0.3);
-      const cols = 3;
-      const colW = 3.8;
-      skills.forEach((skill, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = 0.5 + col * (colW + 0.35);
-        const y = 1.2 + row * 0.72;
-        s3.addShape(pptx.ShapeType.rect, { x, y, w: colW, h: 0.52, fill: { color: "1e293b" }, line: { color: ACC, width: 1 } });
-        s3.addText(skill, { x: x + 0.15, y: y + 0.1, w: colW - 0.3, h: 0.32, fontSize: 12, color: WHITE, fontFace: "Calibri", bold: false });
-      });
-
-      // ── Slide 4: Projects ────────────────────────────────────────────────────
-      const s4 = pptx.addSlide();
-      bg(s4);
-      heading(s4, "Projects", 0.3);
-      projects.forEach((p, i) => {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const x = 0.5 + col * 6.4;
-        const y = 1.1 + row * 2.2;
-        s4.addShape(pptx.ShapeType.rect, { x, y, w: 6.0, h: 2.0, fill: { color: "1e293b" }, line: { color: "334155", width: 1 } });
-        s4.addShape(pptx.ShapeType.rect, { x, y, w: 6.0, h: 0.06, fill: { color: ACC } });
-        s4.addText(p.title, { x: x + 0.15, y: y + 0.15, w: 5.7, h: 0.4, fontSize: 13, bold: true, color: WHITE, fontFace: "Calibri" });
-        if (p.desc) {
-          s4.addText(p.desc.slice(0, 120) + (p.desc.length > 120 ? "…" : ""), {
-            x: x + 0.15, y: y + 0.6, w: 5.7, h: 0.9, fontSize: 10, color: "94a3b8", fontFace: "Calibri", wrap: true,
-          });
-        }
-        if (p.tech) {
-          s4.addText(p.tech, { x: x + 0.15, y: y + 1.6, w: 5.7, h: 0.3, fontSize: 9, color: ACC, fontFace: "Calibri", italic: true });
-        }
-      });
-
-      // ── Slide 5: Certificates ────────────────────────────────────────────────
-      const s5 = pptx.addSlide();
-      bg(s5);
-      heading(s5, "Certificates & Achievements", 0.3);
-      certs.forEach((c, i) => {
-        const y = 1.1 + i * 0.75;
-        s5.addShape(pptx.ShapeType.rect, { x: 0.5, y, w: 0.06, h: 0.52, fill: { color: ACC } });
-        s5.addText(c.title, { x: 0.75, y, w: 9.0, h: 0.3, fontSize: 13, bold: true, color: WHITE, fontFace: "Calibri" });
-        s5.addText(c.issuer, { x: 0.75, y: y + 0.28, w: 9.0, h: 0.25, fontSize: 11, color: DIM, fontFace: "Calibri" });
-      });
-
-      // ── Slide 6: Contact ──────────────────────────────────────────────────────
-      const s6 = pptx.addSlide();
-      bg(s6);
-      s6.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 7.5, fill: { color: "0a1628" } });
-      s6.addText("Let's Connect", { x: 0.8, y: 1.2, w: 11.73, h: 0.9, fontSize: 36, bold: true, color: WHITE, fontFace: "Calibri", align: "center" });
-      accent(s6, 2.2);
-      const contacts = [
-        profile.email    ? "✉  " + profile.email : null,
-        profile.location ? "📍 " + profile.location : null,
-        profile.github_url   ? "⚡ " + profile.github_url : null,
-        profile.linkedin_url ? "🔗 " + profile.linkedin_url : null,
-      ].filter(Boolean);
-      contacts.forEach((c, i) => {
-        s6.addText(c, { x: 0.8, y: 2.8 + i * 0.7, w: 11.73, h: 0.55, fontSize: 15, color: "94a3b8", fontFace: "Calibri", align: "center" });
-      });
-      s6.addText("Thank you for viewing my portfolio!", {
-        x: 0.8, y: 6.6, w: 11.73, h: 0.4, fontSize: 12, color: DIM, fontFace: "Calibri", align: "center", italic: true,
-      });
-
       pptx.writeFile({ fileName: profile.name.replace(/\\s+/g, "_") + "_Portfolio.pptx" })
-        .then(() => {
-          document.querySelector("p").textContent = "✅ Download started! You can close this tab.";
-          document.querySelector(".spinner").style.display = "none";
-        })
-        .catch(err => {
-          document.querySelector("p").textContent = "❌ Error: " + err.message;
-        });
+        .then(() => window.close())
+        .catch(console.error);
     })();
-  </script>
+  <\/script>
 </body>
 </html>`;
 
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
-  window.open(url, "_blank");
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  const win = window.open(url, "_blank");
+  if (!win) alert("Please allow pop-ups to generate the PPTX.");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// ─── HeroSection ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// HERO SECTION
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export function HeroSection() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [roles, setRoles] = useState<string[]>(DEFAULT_ROLES);
   const [mounted, setMounted] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState({ x: 0, y: 0, active: false });
   const [isGeneratingPptx, setIsGeneratingPptx] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
 
+  // Fetch profile
   useEffect(() => { getProfile().then(setProfile); }, []);
+
+  // Fetch typing roles from DB
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("hero_roles")
+      .select("label")
+      .order("sort_order", { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setRoles(data.map((r: { label: string }) => r.label));
+        }
+      });
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -399,7 +339,10 @@ export function HeroSection() {
         <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold mb-6">
           <span className="text-gradient">{profile?.name ?? "Clarence Espanol"}</span>
         </h1>
-        <TypewriterRole />
+
+        {/* Typewriter — powered by DB roles */}
+        <TypewriterRole roles={roles} />
+
         <div className="flex justify-center">
           <AvailabilityBadge status={profile?.availability_status ?? null} />
         </div>
@@ -413,8 +356,7 @@ export function HeroSection() {
               View My Work
             </a>
           </Button>
-          
-          {/* FIXED: Explicitly set text-foreground and hover:text-foreground/primary to fix unreadable text on hover */}
+
           <Button variant="outline" size="lg"
             className="px-8 py-6 text-lg rounded-xl border-border text-foreground hover:bg-secondary hover:text-primary hover:border-primary/50 transition-all duration-300 hover:scale-105"
             asChild>
@@ -450,15 +392,9 @@ export function HeroSection() {
                 }}
               >
                 {isGeneratingPptx ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generating PPTX…
-                  </>
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating PPTX…</>
                 ) : (
-                  <>
-                    <Presentation className="w-4 h-4 mr-2" />
-                    Portfolio (Auto-Generate PPTX)
-                  </>
+                  <><Presentation className="w-4 h-4 mr-2" />Portfolio (Auto-Generate PPTX)</>
                 )}
               </DropdownMenuItem>
             </DropdownMenuContent>
