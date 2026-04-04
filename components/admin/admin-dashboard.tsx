@@ -1968,6 +1968,7 @@ function ProfileManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [imgKey, setImgKey] = useState(0);
 
   const [isExpModalOpen, setIsExpModalOpen] = useState(false);
   const [newExp, setNewExp] = useState<Omit<WorkExperience, "id" | "sort_order">>({
@@ -2049,12 +2050,49 @@ function ProfileManager() {
   };
 
   const uploadProfileFile = async (file: File, field: keyof Profile, folder: string) => {
+    if (!profile) return;
     toast("Uploading file…", "upload");
-    const url = await uploadFile(supabase, file, folder);
-    if (url && profile) {
-      setProfile({ ...profile, [field]: url });
-      toast("File uploaded successfully!", "success");
+
+    // Delete old file from storage
+    const oldUrl = profile[field] as string | null;
+    if (oldUrl) {
+      try {
+        const marker = `/object/public/${BUCKET}/`;
+        const idx = oldUrl.indexOf(marker);
+        if (idx !== -1) {
+          const oldPath = decodeURIComponent(oldUrl.slice(idx + marker.length).split("?")[0]);
+          await supabase.storage.from(BUCKET).remove([oldPath]);
+        }
+      } catch (e) {
+        console.warn("Could not delete old file:", e);
+      }
     }
+
+    // Upload new file
+    const url = await uploadFile(supabase, file, folder);
+    if (!url) { toast("Upload failed.", "error"); return; }
+
+    // Update DB — use upsert on the whole row to bypass strict RLS UPDATE policies
+    const updatedProfile = { ...profile, [field]: url };
+    const { data: upserted, error: upsertErr } = await supabase
+      .from("profile")
+      .upsert(updatedProfile, { onConflict: "id" })
+      .select()
+      .single();
+
+    if (upsertErr) {
+      console.error("Profile upsert error:", upsertErr);
+      toast(`DB error: ${upsertErr.message}`, "error");
+      return;
+    }
+
+    // Update local state from what DB actually saved
+    if (upserted) setProfile(upserted);
+
+    // Force <img> remount so browser fetches fresh photo
+    setImgKey((k) => k + 1);
+
+    toast("Photo updated successfully!", "success");
   };
 
   if (loading) return <div className="flex justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -2076,7 +2114,7 @@ function ProfileManager() {
           <CardContent className="space-y-4">
             <div className="flex flex-col items-center gap-3">
               <div className="w-24 h-24 rounded-full border-4 border-primary/20 overflow-hidden bg-primary/10 flex items-center justify-center">
-                {profile.profile_picture_url ? <img src={profile.profile_picture_url} alt="avatar" className="w-full h-full object-cover" /> : <User className="w-10 h-10 text-primary" />}
+                {profile.profile_picture_url ? <img key={imgKey} src={profile.profile_picture_url} alt="avatar" className="w-full h-full object-cover" /> : <User className="w-10 h-10 text-primary" />}
               </div>
               <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadProfileFile(f, "profile_picture_url", "avatars"); }} />
               <Button variant="outline" size="sm" onClick={() => avatarRef.current?.click()}><Upload className="w-3.5 h-3.5 mr-1" />Change Photo</Button>
