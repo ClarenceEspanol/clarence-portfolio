@@ -90,8 +90,9 @@
 */
 /* stylelint-disable-next-line at-rule-no-unknown */
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: 'Montserrat', system-ui, sans-serif;
+  --font-mono: 'Montserrat', system-ui, sans-serif;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -136,10 +137,32 @@
     /* stylelint-disable-next-line at-rule-no-unknown */
     @apply border-border outline-ring/50;
   }
+
   body {
     /* stylelint-disable-next-line at-rule-no-unknown */
     @apply bg-background text-foreground;
+    /* Montserrat — clean geometric sans */
+    font-family: 'Montserrat', system-ui, sans-serif;
   }
+
+  /*
+    Cormorant Garamond for headings only — same luxury serif DNA as The Seasons.
+    NO size, weight, spacing, or line-height overrides here.
+    All sizing is controlled by Tailwind classes in your components.
+  */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+
+  /* Montserrat for mono/code labels */
+  code, pre, kbd, samp {
+    font-family: 'Montserrat', system-ui, sans-serif;
+  }
+}
+
+/* Utility: apply display font anywhere with .font-display */
+.font-display {
+  font-family: 'Cormorant Garamond', Georgia, serif;
 }
 
 /* Custom animations */

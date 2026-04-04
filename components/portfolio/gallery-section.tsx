@@ -14,6 +14,7 @@ interface GalleryImage {
 export function GallerySection() {
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [touchedId, setTouchedId] = useState<string | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number | null>(null);
   const pausedRef = useRef(false);
@@ -83,43 +84,80 @@ export function GallerySection() {
           onMouseEnter={() => { pausedRef.current = true; }}
           onMouseLeave={() => { pausedRef.current = false; }}
         >
-          {doubled.map((img, i) => (
-            <div
-              key={`${img.id}-${i}`}
-              className="group relative shrink-0 rounded-xl overflow-hidden border border-border/50 bg-black"
-              style={{
-                width: "auto",
-                height: "9rem",
-                minWidth: "7rem",
-                maxWidth: "14rem",
-                cursor: "default",
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={img.url}
-                alt={img.caption ?? "Gallery image"}
-                className="w-full h-full object-contain grayscale transition-all duration-500 group-hover:grayscale-0 group-hover:scale-105"
-                loading="lazy"
-                style={{ display: "block" }}
-              />
+          {doubled.map((img, i) => {
+            const uid = `${img.id}-${i}`;
+            const isActive = touchedId === uid;
 
-              {/* Cyan overlay tint */}
-              <div className="absolute inset-0 bg-cyan-500/0 group-hover:bg-cyan-500/10 transition-all duration-500" />
+            return (
+              <div
+                key={uid}
+                className="group relative shrink-0 rounded-xl overflow-hidden border border-border/50 bg-black"
+                style={{
+                  width: "auto",
+                  height: "9rem",
+                  minWidth: "7rem",
+                  maxWidth: "14rem",
+                  cursor: "default",
+                }}
+                onTouchStart={() => {
+                  pausedRef.current = true;
+                  setTouchedId(uid);
+                }}
+                onTouchEnd={() => {
+                  setTimeout(() => {
+                    setTouchedId((prev) => (prev === uid ? null : prev));
+                    pausedRef.current = false;
+                  }, 600);
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.url}
+                  alt={img.caption ?? "Gallery image"}
+                  className={[
+                    "w-full h-full object-contain transition-all duration-500",
+                    "group-hover:grayscale-0 group-hover:scale-105",
+                    isActive ? "grayscale-0 scale-105" : "grayscale",
+                  ].join(" ")}
+                  loading="lazy"
+                  style={{ display: "block" }}
+                />
 
-              {/* Cyan border glow */}
-              <div className="absolute inset-0 rounded-xl ring-0 group-hover:ring-2 group-hover:ring-cyan-500/60 transition-all duration-500" />
+                {/* Cyan overlay tint */}
+                <div
+                  className={[
+                    "absolute inset-0 transition-all duration-500",
+                    "group-hover:bg-cyan-500/10",
+                    isActive ? "bg-cyan-500/10" : "bg-cyan-500/0",
+                  ].join(" ")}
+                />
 
-              {/* Caption slide-up — only when caption exists */}
-              {img.caption && (
-                <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 bg-linear-to-t from-black/90 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                  <p className="text-[10px] text-white font-medium line-clamp-3 leading-snug">
-                    {img.caption}
-                  </p>
-                </div>
-              )}
-            </div>
-          ))}
+                {/* Cyan border glow */}
+                <div
+                  className={[
+                    "absolute inset-0 rounded-xl transition-all duration-500",
+                    "group-hover:ring-2 group-hover:ring-cyan-500/60",
+                    isActive ? "ring-2 ring-cyan-500/60" : "ring-0",
+                  ].join(" ")}
+                />
+
+                {/* Caption slide-up — only when caption exists */}
+                {img.caption && (
+                  <div
+                    className={[
+                      "absolute bottom-0 left-0 right-0 px-2.5 py-2 bg-linear-to-t from-black/90 to-transparent transition-transform duration-300",
+                      "group-hover:translate-y-0",
+                      isActive ? "translate-y-0" : "translate-y-full",
+                    ].join(" ")}
+                  >
+                    <p className="text-[10px] text-white font-medium line-clamp-3 leading-snug">
+                      {img.caption}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
