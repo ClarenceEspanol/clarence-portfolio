@@ -15,6 +15,8 @@ import { toast } from "./toast";
 import { uploadFile, isPdfUrl, CERT_CATEGORIES } from "./utils";
 import type { Certificate } from "./types";
 
+const MAX_FEATURED = 6;
+
 function CertThumbnail({ url, title }: { url: string; title: string }) {
   if (isPdfUrl(url)) {
     return (
@@ -26,10 +28,91 @@ function CertThumbnail({ url, title }: { url: string; title: string }) {
   }
   return (
     <div className="w-16 h-12 rounded-lg overflow-hidden border shrink-0">
-      <img src={url} alt={title} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+      <img src={url} alt={title} className="w-full h-full object-cover"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
     </div>
   );
 }
+
+// ── CertForm is defined OUTSIDE CertificatesManager so React never remounts it
+// on parent state changes — this fixes the auto-scroll-to-top bug when pasting,
+// uploading, or interacting with any field inside the form.
+interface CertFormProps {
+  cert: any;
+  setCert: (c: any) => void;
+  certFileRef: RefObject<HTMLInputElement | null>;
+  supabase: ReturnType<typeof createClient>;
+}
+
+function CertForm({ cert, setCert, certFileRef, supabase }: CertFormProps) {
+  return (
+    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Title *</label>
+        <Input value={cert.title} onChange={(e) => setCert({ ...cert, title: e.target.value })} placeholder="e.g., Google UX Design Certificate" />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Issuer *</label>
+        <Input value={cert.issuer} onChange={(e) => setCert({ ...cert, issuer: e.target.value })} placeholder="e.g., Coursera / Google" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Date</label>
+          <Input value={cert.date || ""} onChange={(e) => setCert({ ...cert, date: e.target.value })} placeholder="e.g., Dec 14, 2025" />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Category</label>
+          <Select value={cert.category || "Programming"} onValueChange={(v) => setCert({ ...cert, category: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{CERT_CATEGORIES.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Description</label>
+        <Textarea value={cert.description || ""} onChange={(e) => setCert({ ...cert, description: e.target.value })} rows={3} />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium flex items-center gap-1"><FileText className="w-3.5 h-3.5" />Certificate File / URL</label>
+        <Input value={cert.certificate_url || ""} onChange={(e) => setCert({ ...cert, certificate_url: e.target.value })} placeholder="https://... or upload below" />
+        <div className="flex items-center gap-2">
+          <input ref={certFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
+            const file = e.target.files?.[0]; if (!file) return;
+            toast("Uploading certificate file…", "upload");
+            const url = await uploadFile(supabase, file, "certificates");
+            if (url) { setCert({ ...cert, certificate_url: url }); toast("Certificate file uploaded!", "success"); }
+          }} />
+          <Button type="button" variant="outline" size="sm" onClick={() => certFileRef.current?.click()}>
+            <Upload className="w-3.5 h-3.5 mr-1" />Upload File (Image or PDF)
+          </Button>
+        </div>
+        {cert.certificate_url && (
+          isPdfUrl(cert.certificate_url) ? (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted border">
+              <FileText className="w-8 h-8 text-primary shrink-0" />
+              <div>
+                <p className="text-sm font-medium">PDF uploaded</p>
+                <a href={cert.certificate_url} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5">
+                  <ExternalLink className="w-3 h-3" /> Open PDF
+                </a>
+              </div>
+            </div>
+          ) : (
+            <img src={cert.certificate_url} alt="preview" className="w-full h-28 object-cover rounded-lg border"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          )
+        )}
+      </div>
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium">Featured</label>
+        <Switch checked={cert.featured} onCheckedChange={(v) => setCert({ ...cert, featured: v })} />
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export function CertificatesManager() {
   const supabase = createClient();
@@ -77,6 +160,11 @@ export function CertificatesManager() {
   };
 
   const toggleFeatured = async (cert: Certificate) => {
+    const featuredCount = certificates.filter((c) => c.featured).length;
+    if (!cert.featured && featuredCount >= MAX_FEATURED) {
+      toast(`Max ${MAX_FEATURED} featured certificates allowed. Remove one first.`, "error");
+      return;
+    }
     const updated = { ...cert, featured: !cert.featured };
     await supabase.from("certificates").update({ featured: updated.featured }).eq("id", cert.id);
     setCertificates(certificates.map((c) => (c.id === cert.id ? updated : c)));
@@ -89,57 +177,20 @@ export function CertificatesManager() {
     return c.category === filter;
   });
 
-  const CertForm = ({ cert, setCert, certFileRef }: { cert: any; setCert: (c: any) => void; certFileRef: RefObject<HTMLInputElement | null> }) => (
-    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-      <div className="space-y-2"><label className="text-sm font-medium">Title *</label><Input value={cert.title} onChange={(e) => setCert({ ...cert, title: e.target.value })} placeholder="e.g., Google UX Design Certificate" /></div>
-      <div className="space-y-2"><label className="text-sm font-medium">Issuer *</label><Input value={cert.issuer} onChange={(e) => setCert({ ...cert, issuer: e.target.value })} placeholder="e.g., Coursera / Google" /></div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2"><label className="text-sm font-medium">Date</label><Input value={cert.date || ""} onChange={(e) => setCert({ ...cert, date: e.target.value })} placeholder="e.g., Dec 14, 2025" /></div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Category</label>
-          <Select value={cert.category || "Programming"} onValueChange={(v) => setCert({ ...cert, category: v })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{CERT_CATEGORIES.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="space-y-2"><label className="text-sm font-medium">Description</label><Textarea value={cert.description || ""} onChange={(e) => setCert({ ...cert, description: e.target.value })} rows={3} /></div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium flex items-center gap-1"><FileText className="w-3.5 h-3.5" />Certificate File / URL</label>
-        <Input value={cert.certificate_url || ""} onChange={(e) => setCert({ ...cert, certificate_url: e.target.value })} placeholder="https://... or upload below" />
-        <div className="flex items-center gap-2">
-          <input ref={certFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={async (e) => {
-            const file = e.target.files?.[0]; if (!file) return;
-            toast("Uploading certificate file…", "upload");
-            const url = await uploadFile(supabase, file, "certificates");
-            if (url) { setCert({ ...cert, certificate_url: url }); toast("Certificate file uploaded!", "success"); }
-          }} />
-          <Button type="button" variant="outline" size="sm" onClick={() => certFileRef.current?.click()}><Upload className="w-3.5 h-3.5 mr-1" />Upload File (Image or PDF)</Button>
-        </div>
-        {cert.certificate_url && (
-          isPdfUrl(cert.certificate_url) ? (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted border">
-              <FileText className="w-8 h-8 text-primary shrink-0" />
-              <div><p className="text-sm font-medium">PDF uploaded</p><a href={cert.certificate_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"><ExternalLink className="w-3 h-3" /> Open PDF</a></div>
-            </div>
-          ) : (
-            <img src={cert.certificate_url} alt="preview" className="w-full h-28 object-cover rounded-lg border" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-          )
-        )}
-      </div>
-      <div className="flex items-center justify-between"><label className="text-sm font-medium">Featured</label><Switch checked={cert.featured} onCheckedChange={(v) => setCert({ ...cert, featured: v })} /></div>
-    </div>
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div><h2 className="text-2xl font-bold">Certificates</h2><p className="text-muted-foreground">{certificates.length} certificates ({certificates.filter((c) => c.featured).length} featured)</p></div>
+        <div>
+          <h2 className="text-2xl font-bold">Certificates</h2>
+          <p className="text-muted-foreground">
+            {certificates.length} certificates ({certificates.filter((c) => c.featured).length}/{MAX_FEATURED} featured)
+          </p>
+        </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-2" />Add Certificate</Button></DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Add New Certificate</DialogTitle></DialogHeader>
-            <CertForm cert={newCert} setCert={setNewCert} certFileRef={fileInputRef} />
+            <CertForm cert={newCert} setCert={setNewCert} certFileRef={fileInputRef} supabase={supabase} />
             <DialogFooter>
               <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
               <Button onClick={handleAdd} disabled={saving || !newCert.title || !newCert.issuer}>{saving ? "Saving..." : "Add Certificate"}</Button>
@@ -149,8 +200,11 @@ export function CertificatesManager() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {[{ key: "all", label: `All (${certificates.length})` }, { key: "featured", label: `⭐ Featured (${certificates.filter((c) => c.featured).length})` },
-          ...CERT_CATEGORIES.filter((cat) => certificates.some((c) => c.category === cat)).map((cat) => ({ key: cat, label: `${cat} (${certificates.filter((c) => c.category === cat).length})` }))
+        {[
+          { key: "all", label: `All (${certificates.length})` },
+          { key: "featured", label: `⭐ Featured (${certificates.filter((c) => c.featured).length}/${MAX_FEATURED})` },
+          ...CERT_CATEGORIES.filter((cat) => certificates.some((c) => c.category === cat))
+            .map((cat) => ({ key: cat, label: `${cat} (${certificates.filter((c) => c.category === cat).length})` }))
         ].map(({ key, label }) => (
           <Button key={key} variant={filter === key ? "default" : "outline"} size="sm" onClick={() => setFilter(key)}>{label}</Button>
         ))}
@@ -177,30 +231,49 @@ export function CertificatesManager() {
                       <div className="flex items-center gap-2 mt-2">
                         {cert.category && <Badge variant="outline" className="text-xs">{cert.category}</Badge>}
                         {cert.date && <span className="text-xs text-muted-foreground">{cert.date}</span>}
-                        {cert.certificate_url && <a href={cert.certificate_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" />View</a>}
+                        {cert.certificate_url && (
+                          <a href={cert.certificate_url} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline flex items-center gap-1">
+                            <ExternalLink className="w-3 h-3" />View
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => toggleFeatured(cert)} title={cert.featured ? "Unfeature" : "Feature"}><Star className={`w-4 h-4 ${cert.featured ? "text-primary fill-primary" : ""}`} /></Button>
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => toggleFeatured(cert)}
+                      title={cert.featured ? "Unfeature" : certificates.filter((c) => c.featured).length >= MAX_FEATURED ? `Max ${MAX_FEATURED} featured reached` : "Feature"}
+                    >
+                      <Star className={`w-4 h-4 ${cert.featured ? "text-primary fill-primary" : ""}`} />
+                    </Button>
                     <Dialog>
-                      <DialogTrigger asChild><Button variant="ghost" size="icon" onClick={() => setEditingCert(cert)}><Pencil className="w-4 h-4" /></Button></DialogTrigger>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="icon" onClick={() => setEditingCert(cert)}><Pencil className="w-4 h-4" /></Button>
+                      </DialogTrigger>
                       <DialogContent className="max-w-2xl">
                         <DialogHeader><DialogTitle>Edit Certificate</DialogTitle></DialogHeader>
-                        {editingCert && <CertForm cert={editingCert} setCert={setEditingCert} certFileRef={editFileInputRef} />}
+                        {editingCert && <CertForm cert={editingCert} setCert={setEditingCert} certFileRef={editFileInputRef} supabase={supabase} />}
                         <DialogFooter>
                           <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
                           <DialogClose asChild><Button onClick={handleUpdate} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button></DialogClose>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
-                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDelete(cert.id)}><Trash2 className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDelete(cert.id)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
-          {filteredCerts.length === 0 && <Card className="bg-card/50 border-dashed"><CardContent className="p-8 text-center"><p className="text-muted-foreground">No certificates found.</p></CardContent></Card>}
+          {filteredCerts.length === 0 && (
+            <Card className="bg-card/50 border-dashed">
+              <CardContent className="p-8 text-center"><p className="text-muted-foreground">No certificates found.</p></CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

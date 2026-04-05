@@ -18,6 +18,166 @@ import { toast } from "./toast";
 import { uploadFile } from "./utils";
 import type { Project } from "./types";
 
+const MAX_FEATURED = 5;
+
+// Common preset tags — click to instantly add without typing
+
+// ── ProjectForm is defined OUTSIDE ProjectsManager so React never remounts it
+// on state changes inside the parent — this is what was causing the scroll-to-top
+// bug whenever you typed, pasted, uploaded, or added a tag.
+interface ProjectFormProps {
+  project: Omit<Project, "id" | "sort_order"> & Partial<Pick<Project, "id" | "sort_order">>;
+  setProject: (p: any) => void;
+  imageInputRef: React.RefObject<HTMLInputElement | null>;
+  uploadImage: (file: File) => Promise<string | null>;
+}
+
+function ProjectForm({ project, setProject, imageInputRef, uploadImage }: ProjectFormProps) {
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryImages: string[] = project.gallery_images ?? [];
+  const remainingSlots = 5 - galleryImages.length;
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+
+  const addTags = (input: string) => {
+    const incoming = input.split(",").map((t) => t.trim()).filter(Boolean);
+    const existing: string[] = project.tags || [];
+    const merged = [...existing, ...incoming.filter((t) => !existing.includes(t))];
+    if (incoming.length) setProject({ ...project, tags: merged });
+    setTagInput("");
+  };
+
+  const removeTag = (tag: string) =>
+    setProject({ ...project, tags: (project.tags || []).filter((t: string) => t !== tag) });
+
+  const addGalleryImages = async (files: File[]) => {
+    const toUpload = files.slice(0, remainingSlots);
+    if (toUpload.length === 0) return;
+    setUploadingGallery(true);
+    toast(`Uploading ${toUpload.length} image${toUpload.length > 1 ? "s" : ""}…`, "upload");
+    const urls: string[] = [];
+    for (const file of toUpload) {
+      const url = await uploadImage(file);
+      if (url) urls.push(url);
+    }
+    setProject({ ...project, gallery_images: [...galleryImages, ...urls] });
+    setUploadingGallery(false);
+    if (urls.length > 0) toast(`${urls.length} image${urls.length > 1 ? "s" : ""} uploaded!`, "success");
+  };
+
+  const removeGalleryImage = (idx: number) =>
+    setProject({ ...project, gallery_images: galleryImages.filter((_: string, i: number) => i !== idx) });
+
+  return (
+    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Title *</label>
+        <Input value={project.title} onChange={(e) => setProject({ ...project, title: e.target.value })} placeholder="Project title" />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Type</label>
+        <Input value={project.type || ""} onChange={(e) => setProject({ ...project, type: e.target.value })} placeholder="e.g., Full-Stack Development" />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Short Description</label>
+        <Textarea value={project.description || ""} onChange={(e) => setProject({ ...project, description: e.target.value })} rows={2} placeholder="Brief summary shown on the card" />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Full Description <span className="text-xs text-muted-foreground">(shown in modal)</span></label>
+        <Textarea value={project.long_description || ""} onChange={(e) => setProject({ ...project, long_description: e.target.value })} rows={5} placeholder="Detailed project write-up, features, challenges, etc." />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Live URL</label>
+        <Input value={project.live_url || ""} onChange={(e) => setProject({ ...project, live_url: e.target.value })} placeholder="https://..." />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium flex items-center gap-1"><Github className="w-3.5 h-3.5" />GitHub URL</label>
+        <Input value={project.github_url || ""} onChange={(e) => setProject({ ...project, github_url: e.target.value })} placeholder="https://github.com/..." />
+      </div>
+
+      {/* Cover Image */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium flex items-center gap-1"><Image className="w-3.5 h-3.5" />Cover Image</label>
+        <Input value={project.image_url || ""} onChange={(e) => setProject({ ...project, image_url: e.target.value })} placeholder="https://... or upload below" />
+        <div className="flex items-center gap-2">
+          <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+            const file = e.target.files?.[0]; if (!file) return;
+            toast("Uploading cover image…", "upload");
+            const url = await uploadImage(file);
+            if (url) { setProject({ ...project, image_url: url }); toast("Cover image uploaded!", "success"); }
+          }} />
+          <Button type="button" variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}>
+            <Upload className="w-3.5 h-3.5 mr-1" />Upload Cover
+          </Button>
+        </div>
+        {project.image_url && <img src={project.image_url} alt="cover preview" className="w-full h-28 object-cover rounded-lg border" />}
+      </div>
+
+      {/* Gallery Images */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium flex items-center gap-1">
+          <Image className="w-3.5 h-3.5" />Gallery Images
+          <span className="text-xs text-muted-foreground ml-1">({galleryImages.length}/5 — shown only in modal)</span>
+        </label>
+        {galleryImages.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {galleryImages.map((url: string, idx: number) => (
+              <div key={idx} className="relative group rounded-lg overflow-hidden border h-20">
+                <img src={url} alt={`gallery ${idx + 1}`} className="w-full h-full object-cover" />
+                <button type="button" onClick={() => removeGalleryImage(idx)}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <X className="w-3 h-3" />
+                </button>
+                <div className="absolute bottom-1 left-1 text-[10px] bg-black/50 text-white px-1 rounded">{idx + 1}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {remainingSlots > 0 && (
+          <div>
+            <input type="file" accept="image/*" multiple className="hidden" ref={galleryInputRef}
+              onChange={async (e) => { const files = Array.from(e.target.files ?? []); await addGalleryImages(files); if (e.target) e.target.value = ""; }} />
+            <Button type="button" variant="outline" size="sm" onClick={() => galleryInputRef.current?.click()} disabled={remainingSlots === 0 || uploadingGallery}>
+              {uploadingGallery
+                ? <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />Uploading…</>
+                : <><Upload className="w-3.5 h-3.5 mr-1" />Add Gallery Images ({remainingSlots} slot{remainingSlots !== 1 ? "s" : ""} left)</>}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Tags */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Tags</label>
+        <p className="text-xs text-muted-foreground">Separate multiple tags with commas, e.g. <span className="font-mono">Next.js, TypeScript, Supabase</span></p>
+        <div className="flex gap-2">
+          <Input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            placeholder="Next.js, TypeScript, Supabase..."
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTags(tagInput); } }}
+          />
+          <Button type="button" variant="outline" onClick={() => addTags(tagInput)}>Add</Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(project.tags || []).map((tag: string) => (
+            <Badge key={tag} variant="secondary" className="cursor-pointer gap-1" onClick={() => removeTag(tag)}>
+              {tag}<X className="w-3 h-3" />
+            </Badge>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium">Featured</label>
+        <Switch checked={project.featured} onCheckedChange={(v) => setProject({ ...project, featured: v })} />
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export function ProjectsManager() {
   const supabase = createClient();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -25,7 +185,6 @@ export function ProjectsManager() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [tagInput, setTagInput] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [newProject, setNewProject] = useState<Omit<Project, "id" | "sort_order">>({
     title: "", description: null, long_description: null, tags: [], live_url: null, github_url: null, image_url: null, gallery_images: [], type: null, featured: false,
@@ -44,7 +203,7 @@ export function ProjectsManager() {
     if (error) { toast("Failed to add project.", "error"); setSaving(false); return; }
     if (data) setProjects([...projects, data]);
     setNewProject({ title: "", description: null, long_description: null, tags: [], live_url: null, github_url: null, image_url: null, gallery_images: [], type: null, featured: false });
-    setTagInput(""); setIsAddOpen(false); setSaving(false);
+    setIsAddOpen(false); setSaving(false);
     toast("Project added successfully!", "success");
   };
 
@@ -65,6 +224,11 @@ export function ProjectsManager() {
   };
 
   const toggleFeatured = async (project: Project) => {
+    const featuredCount = projects.filter((p) => p.featured).length;
+    if (!project.featured && featuredCount >= MAX_FEATURED) {
+      toast(`Max ${MAX_FEATURED} featured projects allowed. Remove one first.`, "error");
+      return;
+    }
     const updated = { ...project, featured: !project.featured };
     await supabase.from("projects").update({ featured: updated.featured }).eq("id", project.id);
     setProjects(projects.map((p) => (p.id === project.id ? updated : p)));
@@ -96,103 +260,20 @@ export function ProjectsManager() {
     toast("Order updated!", "success");
   };
 
-  const addTag = (tags: string[], setFn: (t: string[]) => void) => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) { setFn([...tags, tagInput.trim()]); setTagInput(""); }
-  };
-  const removeTag = (tag: string, tags: string[], setFn: (t: string[]) => void) => setFn(tags.filter((t) => t !== tag));
-
-  const ProjectForm = ({ project, setProject }: { project: any; setProject: (p: any) => void }) => {
-    const galleryInputRef = useRef<HTMLInputElement | null>(null);
-    const galleryImages: string[] = project.gallery_images ?? [];
-    const remainingSlots = 5 - galleryImages.length;
-    const [uploadingGallery, setUploadingGallery] = useState(false);
-
-    const addGalleryImages = async (files: File[]) => {
-      const toUpload = files.slice(0, remainingSlots);
-      if (toUpload.length === 0) return;
-      setUploadingGallery(true);
-      toast(`Uploading ${toUpload.length} image${toUpload.length > 1 ? "s" : ""}…`, "upload");
-      const urls: string[] = [];
-      for (const file of toUpload) { const url = await uploadImage(file); if (url) urls.push(url); }
-      setProject({ ...project, gallery_images: [...galleryImages, ...urls] });
-      setUploadingGallery(false);
-      if (urls.length > 0) toast(`${urls.length} image${urls.length > 1 ? "s" : ""} uploaded!`, "success");
-    };
-
-    const removeGalleryImage = (idx: number) => {
-      setProject({ ...project, gallery_images: galleryImages.filter((_: string, i: number) => i !== idx) });
-    };
-
-    return (
-      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-        <div className="space-y-2"><label className="text-sm font-medium">Title *</label><Input value={project.title} onChange={(e) => setProject({ ...project, title: e.target.value })} placeholder="Project title" /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Type</label><Input value={project.type || ""} onChange={(e) => setProject({ ...project, type: e.target.value })} placeholder="e.g., Full-Stack Development" /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Short Description</label><Textarea value={project.description || ""} onChange={(e) => setProject({ ...project, description: e.target.value })} rows={2} placeholder="Brief summary shown on the card" /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Full Description <span className="text-xs text-muted-foreground">(shown in modal)</span></label><Textarea value={project.long_description || ""} onChange={(e) => setProject({ ...project, long_description: e.target.value })} rows={5} placeholder="Detailed project write-up, features, challenges, etc." /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Live URL</label><Input value={project.live_url || ""} onChange={(e) => setProject({ ...project, live_url: e.target.value })} placeholder="https://..." /></div>
-        <div className="space-y-2"><label className="text-sm font-medium flex items-center gap-1"><Github className="w-3.5 h-3.5" />GitHub URL</label><Input value={project.github_url || ""} onChange={(e) => setProject({ ...project, github_url: e.target.value })} placeholder="https://github.com/..." /></div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-1"><Image className="w-3.5 h-3.5" />Cover Image</label>
-          <Input value={project.image_url || ""} onChange={(e) => setProject({ ...project, image_url: e.target.value })} placeholder="https://... or upload below" />
-          <div className="flex items-center gap-2">
-            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
-              const file = e.target.files?.[0]; if (!file) return;
-              toast("Uploading cover image…", "upload");
-              const url = await uploadImage(file);
-              if (url) { setProject({ ...project, image_url: url }); toast("Cover image uploaded!", "success"); }
-            }} />
-            <Button type="button" variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}><Upload className="w-3.5 h-3.5 mr-1" />Upload Cover</Button>
-          </div>
-          {project.image_url && <img src={project.image_url} alt="cover preview" className="w-full h-28 object-cover rounded-lg border" />}
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium flex items-center gap-1"><Image className="w-3.5 h-3.5" />Gallery Images <span className="text-xs text-muted-foreground ml-1">({galleryImages.length}/5 — shown only in modal)</span></label>
-          {galleryImages.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
-              {galleryImages.map((url: string, idx: number) => (
-                <div key={idx} className="relative group rounded-lg overflow-hidden border h-20">
-                  <img src={url} alt={`gallery ${idx + 1}`} className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removeGalleryImage(idx)} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
-                  <div className="absolute bottom-1 left-1 text-[10px] bg-black/50 text-white px-1 rounded">{idx + 1}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {remainingSlots > 0 && (
-            <div>
-              <input type="file" accept="image/*" multiple className="hidden" ref={galleryInputRef} onChange={async (e) => { const files = Array.from(e.target.files ?? []); await addGalleryImages(files); if (e.target) e.target.value = ""; }} />
-              <Button type="button" variant="outline" size="sm" onClick={() => galleryInputRef.current?.click()} disabled={remainingSlots === 0 || uploadingGallery}>
-                {uploadingGallery ? <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />Uploading…</> : <><Upload className="w-3.5 h-3.5 mr-1" />Add Gallery Images ({remainingSlots} slot{remainingSlots !== 1 ? "s" : ""} left)</>}
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Tags</label>
-          <div className="flex gap-2">
-            <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} placeholder="Add tag..." onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(project.tags, (t) => setProject({ ...project, tags: t })); } }} />
-            <Button type="button" variant="outline" onClick={() => addTag(project.tags, (t) => setProject({ ...project, tags: t }))}>Add</Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(project.tags || []).map((tag: string) => (
-              <Badge key={tag} variant="secondary" className="cursor-pointer gap-1" onClick={() => removeTag(tag, project.tags, (t) => setProject({ ...project, tags: t }))}>{tag}<X className="w-3 h-3" /></Badge>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center justify-between"><label className="text-sm font-medium">Featured</label><Switch checked={project.featured} onCheckedChange={(v) => setProject({ ...project, featured: v })} /></div>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div><h2 className="text-2xl font-bold">Projects</h2><p className="text-muted-foreground">{projects.length} projects ({projects.filter((p) => p.featured).length} featured — shown on homepage)</p></div>
+        <div>
+          <h2 className="text-2xl font-bold">Projects</h2>
+          <p className="text-muted-foreground">
+            {projects.length} projects ({projects.filter((p) => p.featured).length}/{MAX_FEATURED} featured — shown on homepage)
+          </p>
+        </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-2" />Add Project</Button></DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Add New Project</DialogTitle></DialogHeader>
-            <ProjectForm project={newProject} setProject={setNewProject} />
+            <ProjectForm project={newProject} setProject={setNewProject} imageInputRef={imageInputRef} uploadImage={uploadImage} />
             <DialogFooter>
               <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
               <Button onClick={handleAdd} disabled={saving || !newProject.title}>{saving ? "Saving..." : "Add Project"}</Button>
@@ -236,7 +317,12 @@ export function ProjectsManager() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" title={project.featured ? "Remove from featured" : "Mark as featured"} onClick={() => toggleFeatured(project)} className={project.featured ? "text-primary" : "text-muted-foreground hover:text-primary"}>
+                    <Button
+                      variant="ghost" size="icon"
+                      title={project.featured ? "Remove from featured" : projects.filter((p) => p.featured).length >= MAX_FEATURED ? `Max ${MAX_FEATURED} featured reached` : "Mark as featured"}
+                      onClick={() => toggleFeatured(project)}
+                      className={project.featured ? "text-primary" : "text-muted-foreground hover:text-primary"}
+                    >
                       <Star className={`w-4 h-4 ${project.featured ? "fill-primary" : ""}`} />
                     </Button>
                     {project.live_url && <Button variant="ghost" size="icon" asChild><a href={project.live_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-4 h-4" /></a></Button>}
@@ -245,7 +331,7 @@ export function ProjectsManager() {
                       <DialogTrigger asChild><Button variant="ghost" size="icon" onClick={() => setEditingProject(project)}><Pencil className="w-4 h-4" /></Button></DialogTrigger>
                       <DialogContent className="max-w-2xl">
                         <DialogHeader><DialogTitle>Edit Project</DialogTitle></DialogHeader>
-                        {editingProject && <ProjectForm project={editingProject} setProject={setEditingProject} />}
+                        {editingProject && <ProjectForm project={editingProject} setProject={setEditingProject} imageInputRef={imageInputRef} uploadImage={uploadImage} />}
                         <DialogFooter>
                           <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
                           <DialogClose asChild><Button onClick={handleUpdate} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button></DialogClose>
