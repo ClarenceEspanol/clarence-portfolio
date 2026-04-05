@@ -49,7 +49,8 @@ export default function RootLayout({
         >
           {children}
         </ThemeProvider>
-        <Analytics />
+        {/* Analytics only runs in production — avoids burning edge quota during local dev */}
+        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )

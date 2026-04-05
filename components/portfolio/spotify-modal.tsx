@@ -270,6 +270,9 @@ export function SpotifyModal({ isOpen, onClose }: SpotifyModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"top" | "recent">("top");
 
+  // ── Initial full load (nowPlaying + topTracks + recentTracks) ───────────────
+  // Only fires once when the modal opens. Top tracks and recently played are
+  // kept in state — they don't need to re-fetch on every poll cycle.
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
@@ -280,15 +283,23 @@ export function SpotifyModal({ isOpen, onClose }: SpotifyModalProps) {
       .catch(() => { setError("Couldn't load Spotify data"); setLoading(false); });
   }, [isOpen]);
 
-  // Re-poll now-playing every 30s while open
+  // ── Polling — now-playing only, every 60s ────────────────────────────────────
+  // Was: fetching ALL data (nowPlaying + topTracks + recentTracks) every 30s.
+  // Now: only nowPlaying updates on each poll — topTracks/recentTracks are
+  // already in state from the initial load and don't need live refreshing.
+  // This halves the effective payload size and doubles the interval,
+  // cutting poll-driven serverless invocations by ~4x while the modal is open.
   useEffect(() => {
     if (!isOpen) return;
     const interval = setInterval(() => {
       fetch("/api/spotify/now-playing")
         .then((r) => r.json())
-        .then((d) => setData(d))
+        .then((d) => {
+          // Merge: only update nowPlaying — preserve cached topTracks/recentTracks
+          setData((prev) => prev ? { ...prev, nowPlaying: d.nowPlaying } : d);
+        })
         .catch(() => {});
-    }, 30_000);
+    }, 60_000); // 60s — was 30s
     return () => clearInterval(interval);
   }, [isOpen]);
 
@@ -395,7 +406,7 @@ export function SpotifyModal({ isOpen, onClose }: SpotifyModalProps) {
             <div className="px-5 py-3 border-t border-white/[0.07] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-1.5 text-[10px] text-white/25">
                 <Clock className="w-3 h-3" />
-                <span>Updates every 30s</span>
+                <span>Updates every 60s</span>
               </div>
               <a
                 href="https://open.spotify.com"
